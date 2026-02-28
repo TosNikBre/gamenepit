@@ -31,7 +31,7 @@ def _infer_building_type_and_income(building_name, description=''):
         return 'business', 5
 
     if any(keyword in text for keyword in ('фабрик', 'ферм', 'плантац', 'завод')):
-        return 'factory', 0
+        return 'factory', 50
 
     if any(keyword in text for keyword in ('дом', 'особняк', 'жиль')):
         return 'residential', 0
@@ -697,6 +697,21 @@ def island_build_confirm(request):
 @session_required
 def island_process_resource(request):
     """Обработка ресурса на фабрике (п. 3.3)"""
+    normalized = 0
+    for building in ConstructedBuilding.objects.filter(building_type='other'):
+        inferred_type, inferred_income = _infer_building_type_and_income(building.building_name)
+        if inferred_type == 'factory':
+            building.building_type = 'factory'
+            if building.income_per_minute <= 0:
+                building.income_per_minute = inferred_income or 50
+                building.save(update_fields=['building_type', 'income_per_minute'])
+            else:
+                building.save(update_fields=['building_type'])
+            normalized += 1
+
+    if normalized:
+        print(f"Нормализовано фабрик: {normalized}")
+
     if request.method == 'POST':
         form = ResourceProcessingForm(request.POST)
         if form.is_valid():
@@ -723,8 +738,13 @@ def island_process_resource(request):
             return redirect('island_process_confirm')
     else:
         form = ResourceProcessingForm()
+
+    factories = form.fields['factory'].queryset.order_by('-built_at')
     
-    return render(request, 'island/process_resource.html', {'form': form})
+    return render(request, 'island/process_resource.html', {
+        'form': form,
+        'factories': factories,
+    })
 
 
 @session_required
@@ -782,8 +802,9 @@ def island_profit(request):
         inferred_type, inferred_income = _infer_building_type_and_income(building.building_name)
         if inferred_type != 'other':
             building.building_type = inferred_type
-            if inferred_type == 'business' and building.income_per_minute <= 0:
-                building.income_per_minute = inferred_income or 5
+            if inferred_type in ('business', 'factory') and building.income_per_minute <= 0:
+                default_income = 5 if inferred_type == 'business' else 50
+                building.income_per_minute = inferred_income or default_income
                 building.save(update_fields=['building_type', 'income_per_minute'])
             else:
                 building.save(update_fields=['building_type'])
@@ -792,8 +813,10 @@ def island_profit(request):
     if normalized:
         print(f"Нормализовано построек по типам: {normalized}")
 
-    # Получаем все бизнесы (здания типа business)
-    businesses = ConstructedBuilding.objects.filter(building_type='business').order_by('-last_profit_collected')
+    # Получаем объекты для начисления прибыли (бизнесы и фабрики)
+    businesses = ConstructedBuilding.objects.filter(
+        building_type__in=['business', 'factory']
+    ).order_by('-last_profit_collected')
     
     # Для отладки - выводим в консоль
     print(f"Найдено бизнесов: {businesses.count()}")
@@ -830,7 +853,12 @@ def island_profit(request):
             business = form.cleaned_data['business']
             
             # Расчет прибыли
-            profit = business.calculate_accumulated_profit()
+            if business.building_type == 'factory':
+                minutes = (timezone.now() - business.last_profit_collected).total_seconds() / 60
+                factory_income = float(business.income_per_minute or 50)
+                profit = max(0, round(minutes * factory_income, 2))
+            else:
+                profit = business.calculate_accumulated_profit()
             
             if profit > 0:
                 # Сброс таймера
@@ -845,14 +873,16 @@ def island_profit(request):
                     details={
                         'business': business.building_name,
                         'business_id': business.id,
+                        'building_type': business.building_type,
                         'profit': profit,
                         'income_per_minute': float(business.income_per_minute),
                     }
                 )
                 
+                source_label = 'фабрики' if business.building_type == 'factory' else 'бизнеса'
                 messages.success(
                     request, 
-                    f'Прибыль {profit:.2f} ₽ получена от бизнеса "{business.building_name}" для игрока #{business.owner_id}'
+                    f'Прибыль {profit:.2f} ₽ получена от {source_label} "{business.building_name}" для игрока #{business.owner_id}'
                 )
             else:
                 messages.warning(request, 'Прибыль еще не накоплена')
