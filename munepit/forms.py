@@ -1,5 +1,6 @@
 # munepit/forms.py
 from django import forms
+from django.db.models import Q
 from .models import Convict, ConstructedBuilding, Credit, Privateer, PriceList  # Добавлен PriceList
 
 class UserLoginForm(forms.Form):
@@ -185,7 +186,10 @@ class ResourceProcessingForm(forms.Form):
 class BusinessProfitForm(forms.Form):
     """Получение прибыли от бизнеса"""
     business = forms.ModelChoiceField(
-        queryset=ConstructedBuilding.objects.filter(building_type='business'),
+        queryset=ConstructedBuilding.objects.filter(
+            Q(building_type='business') |
+            Q(building_type='other', building_name__iregex=r'(магазин|ресторан|таверн|гостиниц|рынок|бизнес)')
+        ),
         label="Выберите бизнес",
         widget=forms.Select(attrs={'class': 'form-control'}),
         empty_label="--------- Выберите бизнес ---------"
@@ -194,7 +198,10 @@ class BusinessProfitForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Принудительно обновляем queryset
-        self.fields['business'].queryset = ConstructedBuilding.objects.filter(building_type='business')
+        self.fields['business'].queryset = ConstructedBuilding.objects.filter(
+            Q(building_type='business') |
+            Q(building_type='other', building_name__iregex=r'(магазин|ресторан|таверн|гостиниц|рынок|бизнес)')
+        )
         print(f"BusinessProfitForm инициализирована. Бизнесов: {self.fields['business'].queryset.count()}")
 
 
