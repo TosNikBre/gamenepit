@@ -39,6 +39,32 @@ def _infer_building_type_and_income(building_name, description=''):
     return 'other', 0
 
 
+
+
+def _get_player_resource_balance(player_id, resource_key):
+    """Подсчет остатка ресурса у игрока по журналу операций."""
+    logs = LogEntry.objects.filter(
+        table='island',
+        player_id=player_id,
+        details__resource_key=resource_key,
+    )
+
+    balance = 0
+    for entry in logs:
+        details = entry.details or {}
+        quantity = int(details.get('quantity', 0) or 0)
+
+        # Новый формат с явным дельта-изменением склада
+        if 'stock_delta' in details:
+            balance += int(details.get('stock_delta', 0) or 0)
+            continue
+
+        # Старый формат: считаем purchase как приход ресурса игроку
+        if entry.action_type == 'purchase':
+            balance += quantity
+
+    return max(0, balance)
+
 def player_search(request):
     """Поиск игрока по номеру"""
     session_id = request.session.get('session_id')
@@ -555,6 +581,18 @@ def island_purchase_confirm(request):
         total = Decimal(str(purchase_data['total']))
         
         if money_input >= total:
+            player_balance = _get_player_resource_balance(
+                purchase_data['player_id'],
+                purchase_data.get('resource_key')
+            )
+            required_quantity = int(purchase_data.get('quantity', 0) or 0)
+            if player_balance < required_quantity:
+                messages.error(
+                    request,
+                    f'Продажа отменена: у игрока только {player_balance} ед. ресурса при запросе {required_quantity}.'
+                )
+                return redirect('island_purchase_resource')
+
             change = float(money_input - total)
             
             # Запись в БД
@@ -565,11 +603,14 @@ def island_purchase_confirm(request):
                 player_id=purchase_data['player_id'],
                 details={
                     'resource': purchase_data['resource'],
+                    'resource_key': purchase_data.get('resource_key'),
                     'quantity': purchase_data['quantity'],
                     'price_per_unit': purchase_data['price_per_unit'],
                     'total': purchase_data['total'],
                     'money_input': float(money_input),
-                    'change': change
+                    'change': change,
+                    'operation': 'resource_sale',
+                    'stock_delta': -int(purchase_data['quantity']),
                 }
             )
             
@@ -978,17 +1019,26 @@ def island_purchase_resource(request):
                 'sugar_cane': 'Тростник'
             }
             
-            # Сохраняем в сессию для подтверждения
-            request.session['pending_purchase'] = {
-                'resource': resource_names.get(resource, resource),
-                'resource_key': resource,
-                'player_id': player_id,
-                'quantity': quantity,
-                'price_per_unit': price_per_unit,
-                'total': total,
-            }
-            
-            return redirect('island_purchase_confirm')
+            # Продажа ресурса возможна только при наличии у игрока
+            player_balance = _get_player_resource_balance(player_id, resource)
+            if player_balance < quantity:
+                form.add_error(
+                    'quantity',
+                    f'Недостаточно ресурса у игрока. Доступно: {player_balance}, запрошено: {quantity}.'
+                )
+                messages.error(request, 'Продажа ресурса невозможна: у игрока недостаточно запаса.')
+            else:
+                # Сохраняем в сессию для подтверждения
+                request.session['pending_purchase'] = {
+                    'resource': resource_names.get(resource, resource),
+                    'resource_key': resource,
+                    'player_id': player_id,
+                    'quantity': quantity,
+                    'price_per_unit': price_per_unit,
+                    'total': total,
+                }
+                
+                return redirect('island_purchase_confirm')
         else:
             messages.error(request, 'Пожалуйста, исправьте ошибки в форме')
     else:
