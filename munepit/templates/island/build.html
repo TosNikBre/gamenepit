@@ -80,6 +80,10 @@
                 <div class="card-body">
                     <form method="post" id="buildForm" novalidate>
                         {% csrf_token %}
+                        <input type="hidden"
+                               name="{{ form.building.name }}"
+                               id="{{ form.building.id_for_label }}"
+                               value="{{ form.building.value|default:'' }}">
                         
                         {% if form.non_field_errors %}
                             <div class="alert alert-danger">
