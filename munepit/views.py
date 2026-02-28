@@ -11,6 +11,60 @@ from datetime import timedelta
 import json
 
 
+def _infer_building_type_and_income(building_name, description=''):
+    """Определяет тип постройки и доход по названию/описанию прайса."""
+    text = f"{building_name or ''} {description or ''}".lower()
+
+    income_map = {
+        'маленький магазин': 2,
+        'ресторан': 5,
+        'таверна': 4,
+        'гостиница': 8,
+        'рынок': 10,
+    }
+
+    for key, value in income_map.items():
+        if key in text:
+            return 'business', value
+
+    if any(keyword in text for keyword in ('магазин', 'ресторан', 'таверн', 'гостиниц', 'рынок', 'бизнес')):
+        return 'business', 5
+
+    if any(keyword in text for keyword in ('фабрик', 'ферм', 'плантац', 'завод')):
+        return 'factory', 50
+
+    if any(keyword in text for keyword in ('дом', 'особняк', 'жиль')):
+        return 'residential', 0
+
+    return 'other', 0
+
+
+
+
+def _get_player_resource_balance(player_id, resource_key):
+    """Подсчет остатка ресурса у игрока по журналу операций."""
+    logs = LogEntry.objects.filter(
+        table='island',
+        player_id=player_id,
+        details__resource_key=resource_key,
+    )
+
+    balance = 0
+    for entry in logs:
+        details = entry.details or {}
+        quantity = int(details.get('quantity', 0) or 0)
+
+        # Новый формат с явным дельта-изменением склада
+        if 'stock_delta' in details:
+            balance += int(details.get('stock_delta', 0) or 0)
+            continue
+
+        # Старый формат: считаем purchase как приход ресурса игроку
+        if entry.action_type == 'purchase':
+            balance += quantity
+
+    return max(0, balance)
+
 def player_search(request):
     """Поиск игрока по номеру"""
     session_id = request.session.get('session_id')
@@ -527,6 +581,18 @@ def island_purchase_confirm(request):
         total = Decimal(str(purchase_data['total']))
         
         if money_input >= total:
+            player_balance = _get_player_resource_balance(
+                purchase_data['player_id'],
+                purchase_data.get('resource_key')
+            )
+            required_quantity = int(purchase_data.get('quantity', 0) or 0)
+            if player_balance < required_quantity:
+                messages.error(
+                    request,
+                    f'Продажа отменена: у игрока только {player_balance} ед. ресурса при запросе {required_quantity}.'
+                )
+                return redirect('island_purchase_resource')
+
             change = float(money_input - total)
             
             # Запись в БД
@@ -537,11 +603,14 @@ def island_purchase_confirm(request):
                 player_id=purchase_data['player_id'],
                 details={
                     'resource': purchase_data['resource'],
+                    'resource_key': purchase_data.get('resource_key'),
                     'quantity': purchase_data['quantity'],
                     'price_per_unit': purchase_data['price_per_unit'],
                     'total': purchase_data['total'],
                     'money_input': float(money_input),
-                    'change': change
+                    'change': change,
+                    'operation': 'resource_sale',
+                    'stock_delta': -int(purchase_data['quantity']),
                 }
             )
             
@@ -566,14 +635,19 @@ def island_build(request):
             building = form.cleaned_data['building']
             player_id = form.cleaned_data['player_id']
             
+            building_type, income_per_minute = _infer_building_type_and_income(
+                building.name,
+                building.description,
+            )
+
             # Создаем запись о построенном здании
             constructed = ConstructedBuilding.objects.create(
                 building_name=building.name,
-                building_type='other',  # По умолчанию, нужно уточнять
+                building_type=building_type,
                 owner_id=player_id,
                 built_by=request.current_user,
                 cost=building.base_price,
-                income_per_minute=5  # Значение по умолчанию
+                income_per_minute=income_per_minute
             )
             
             # Запись в лог
@@ -597,7 +671,12 @@ def island_build(request):
     else:
         form = BuildingForm()
     
-    return render(request, 'island/build.html', {'form': form})
+    recent_buildings = ConstructedBuilding.objects.order_by('-built_at')[:20]
+    
+    return render(request, 'island/build.html', {
+        'form': form,
+        'recent_buildings': recent_buildings,
+    })
 
 
 @session_required
@@ -618,6 +697,21 @@ def island_build_confirm(request):
 @session_required
 def island_process_resource(request):
     """Обработка ресурса на фабрике (п. 3.3)"""
+    normalized = 0
+    for building in ConstructedBuilding.objects.filter(building_type='other'):
+        inferred_type, inferred_income = _infer_building_type_and_income(building.building_name)
+        if inferred_type == 'factory':
+            building.building_type = 'factory'
+            if building.income_per_minute <= 0:
+                building.income_per_minute = inferred_income or 50
+                building.save(update_fields=['building_type', 'income_per_minute'])
+            else:
+                building.save(update_fields=['building_type'])
+            normalized += 1
+
+    if normalized:
+        print(f"Нормализовано фабрик: {normalized}")
+
     if request.method == 'POST':
         form = ResourceProcessingForm(request.POST)
         if form.is_valid():
@@ -644,8 +738,13 @@ def island_process_resource(request):
             return redirect('island_process_confirm')
     else:
         form = ResourceProcessingForm()
+
+    factories = form.fields['factory'].queryset.order_by('-built_at')
     
-    return render(request, 'island/process_resource.html', {'form': form})
+    return render(request, 'island/process_resource.html', {
+        'form': form,
+        'factories': factories,
+    })
 
 
 @session_required
@@ -697,8 +796,27 @@ def island_profit(request):
     if not session_id:
         return redirect('login')
     
-    # Получаем все бизнесы (здания типа business)
-    businesses = ConstructedBuilding.objects.filter(building_type='business').order_by('-last_profit_collected')
+    # Автонормализация старых построек: раньше все создавались как 'other'
+    normalized = 0
+    for building in ConstructedBuilding.objects.filter(building_type='other'):
+        inferred_type, inferred_income = _infer_building_type_and_income(building.building_name)
+        if inferred_type != 'other':
+            building.building_type = inferred_type
+            if inferred_type in ('business', 'factory') and building.income_per_minute <= 0:
+                default_income = 5 if inferred_type == 'business' else 50
+                building.income_per_minute = inferred_income or default_income
+                building.save(update_fields=['building_type', 'income_per_minute'])
+            else:
+                building.save(update_fields=['building_type'])
+            normalized += 1
+
+    if normalized:
+        print(f"Нормализовано построек по типам: {normalized}")
+
+    # Получаем объекты для начисления прибыли (бизнесы и фабрики)
+    businesses = ConstructedBuilding.objects.filter(
+        building_type__in=['business', 'factory']
+    ).order_by('-last_profit_collected')
     
     # Для отладки - выводим в консоль
     print(f"Найдено бизнесов: {businesses.count()}")
@@ -735,7 +853,12 @@ def island_profit(request):
             business = form.cleaned_data['business']
             
             # Расчет прибыли
-            profit = business.calculate_accumulated_profit()
+            if business.building_type == 'factory':
+                minutes = (timezone.now() - business.last_profit_collected).total_seconds() / 60
+                factory_income = float(business.income_per_minute or 50)
+                profit = max(0, round(minutes * factory_income, 2))
+            else:
+                profit = business.calculate_accumulated_profit()
             
             if profit > 0:
                 # Сброс таймера
@@ -750,14 +873,16 @@ def island_profit(request):
                     details={
                         'business': business.building_name,
                         'business_id': business.id,
+                        'building_type': business.building_type,
                         'profit': profit,
                         'income_per_minute': float(business.income_per_minute),
                     }
                 )
                 
+                source_label = 'фабрики' if business.building_type == 'factory' else 'бизнеса'
                 messages.success(
                     request, 
-                    f'Прибыль {profit:.2f} ₽ получена от бизнеса "{business.building_name}" для игрока #{business.owner_id}'
+                    f'Прибыль {profit:.2f} ₽ получена от {source_label} "{business.building_name}" для игрока #{business.owner_id}'
                 )
             else:
                 messages.warning(request, 'Прибыль еще не накоплена')
@@ -826,7 +951,29 @@ def island_demolish(request):
     else:
         form = BuildingDemolitionForm()
     
-    return render(request, 'island/demolish.html', {'form': form})
+    buildings = ConstructedBuilding.objects.order_by('-built_at')
+
+    demolitions_qs = LogEntry.objects.filter(
+        action_type='demolition',
+        table='island'
+    ).order_by('-timestamp')
+
+    total_demolitions = demolitions_qs.count()
+    demolitions_today = demolitions_qs.filter(timestamp__date=timezone.now().date()).count()
+    total_business_demolitions = demolitions_qs.filter(details__building_type='business').count()
+    total_compensation = sum(float(entry.details.get('accumulated_profit', 0) or 0) for entry in demolitions_qs)
+
+    recent_demolitions = demolitions_qs[:20]
+    
+    return render(request, 'island/demolish.html', {
+        'form': form,
+        'buildings': buildings,
+        'recent_demolitions': recent_demolitions,
+        'total_demolitions': total_demolitions,
+        'demolitions_today': demolitions_today,
+        'total_business_demolitions': total_business_demolitions,
+        'total_compensation': round(total_compensation, 2),
+    })
 
 
 @session_required
@@ -902,17 +1049,26 @@ def island_purchase_resource(request):
                 'sugar_cane': 'Тростник'
             }
             
-            # Сохраняем в сессию для подтверждения
-            request.session['pending_purchase'] = {
-                'resource': resource_names.get(resource, resource),
-                'resource_key': resource,
-                'player_id': player_id,
-                'quantity': quantity,
-                'price_per_unit': price_per_unit,
-                'total': total,
-            }
-            
-            return redirect('island_purchase_confirm')
+            # Продажа ресурса возможна только при наличии у игрока
+            player_balance = _get_player_resource_balance(player_id, resource)
+            if player_balance < quantity:
+                form.add_error(
+                    'quantity',
+                    f'Недостаточно ресурса у игрока. Доступно: {player_balance}, запрошено: {quantity}.'
+                )
+                messages.error(request, 'Продажа ресурса невозможна: у игрока недостаточно запаса.')
+            else:
+                # Сохраняем в сессию для подтверждения
+                request.session['pending_purchase'] = {
+                    'resource': resource_names.get(resource, resource),
+                    'resource_key': resource,
+                    'player_id': player_id,
+                    'quantity': quantity,
+                    'price_per_unit': price_per_unit,
+                    'total': total,
+                }
+                
+                return redirect('island_purchase_confirm')
         else:
             messages.error(request, 'Пожалуйста, исправьте ошибки в форме')
     else:

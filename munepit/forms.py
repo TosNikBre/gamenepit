@@ -1,5 +1,6 @@
 # munepit/forms.py
 from django import forms
+from django.db.models import Q
 from .models import Convict, ConstructedBuilding, Credit, Privateer, PriceList  # Добавлен PriceList
 
 class UserLoginForm(forms.Form):
@@ -166,7 +167,10 @@ class BuildingForm(forms.Form):
 class ResourceProcessingForm(forms.Form):
     """Обработка ресурса"""
     factory = forms.ModelChoiceField(
-        queryset=ConstructedBuilding.objects.filter(building_type='factory'),
+        queryset=ConstructedBuilding.objects.filter(
+            Q(building_type='factory') |
+            Q(building_type='other', building_name__iregex=r'(фабрик|ферм|плантац|завод)')
+        ),
         label="Выберите фабрику",
         widget=forms.Select(attrs={'class': 'form-control'}),
         empty_label="--------- Выберите фабрику ---------"
@@ -181,21 +185,36 @@ class ResourceProcessingForm(forms.Form):
         })
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['factory'].queryset = ConstructedBuilding.objects.filter(
+            Q(building_type='factory') |
+            Q(building_type='other', building_name__iregex=r'(фабрик|ферм|плантац|завод)')
+        )
+
 
 class BusinessProfitForm(forms.Form):
-    """Получение прибыли от бизнеса"""
+    """Получение прибыли от бизнеса/фабрики"""
     business = forms.ModelChoiceField(
-        queryset=ConstructedBuilding.objects.filter(building_type='business'),
-        label="Выберите бизнес",
+        queryset=ConstructedBuilding.objects.filter(
+            Q(building_type='business') |
+            Q(building_type='factory') |
+            Q(building_type='other', building_name__iregex=r'(магазин|ресторан|таверн|гостиниц|рынок|бизнес|фабрик|ферм|плантац|завод)')
+        ),
+        label="Выберите объект (бизнес/фабрика)",
         widget=forms.Select(attrs={'class': 'form-control'}),
-        empty_label="--------- Выберите бизнес ---------"
+        empty_label="--------- Выберите объект ---------"
     )
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Принудительно обновляем queryset
-        self.fields['business'].queryset = ConstructedBuilding.objects.filter(building_type='business')
-        print(f"BusinessProfitForm инициализирована. Бизнесов: {self.fields['business'].queryset.count()}")
+        self.fields['business'].queryset = ConstructedBuilding.objects.filter(
+            Q(building_type='business') |
+            Q(building_type='factory') |
+            Q(building_type='other', building_name__iregex=r'(магазин|ресторан|таверн|гостиниц|рынок|бизнес|фабрик|ферм|плантац|завод)')
+        )
+        print(f"BusinessProfitForm инициализирована. Объектов: {self.fields['business'].queryset.count()}")
 
 
 class BuildingDemolitionForm(forms.Form):
