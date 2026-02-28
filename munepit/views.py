@@ -597,7 +597,12 @@ def island_build(request):
     else:
         form = BuildingForm()
     
-    return render(request, 'island/build.html', {'form': form})
+    recent_buildings = ConstructedBuilding.objects.order_by('-built_at')[:20]
+    
+    return render(request, 'island/build.html', {
+        'form': form,
+        'recent_buildings': recent_buildings,
+    })
 
 
 @session_required
@@ -826,7 +831,29 @@ def island_demolish(request):
     else:
         form = BuildingDemolitionForm()
     
-    return render(request, 'island/demolish.html', {'form': form})
+    buildings = ConstructedBuilding.objects.order_by('-built_at')
+
+    demolitions_qs = LogEntry.objects.filter(
+        action_type='demolition',
+        table='island'
+    ).order_by('-timestamp')
+
+    total_demolitions = demolitions_qs.count()
+    demolitions_today = demolitions_qs.filter(timestamp__date=timezone.now().date()).count()
+    total_business_demolitions = demolitions_qs.filter(details__building_type='business').count()
+    total_compensation = sum(float(entry.details.get('accumulated_profit', 0) or 0) for entry in demolitions_qs)
+
+    recent_demolitions = demolitions_qs[:20]
+    
+    return render(request, 'island/demolish.html', {
+        'form': form,
+        'buildings': buildings,
+        'recent_demolitions': recent_demolitions,
+        'total_demolitions': total_demolitions,
+        'demolitions_today': demolitions_today,
+        'total_business_demolitions': total_business_demolitions,
+        'total_compensation': round(total_compensation, 2),
+    })
 
 
 @session_required
