@@ -145,7 +145,6 @@
                             <select name="{{ form.building.name }}"
                                     id="{{ form.building.id_for_label }}"
                                     class="form-control form-control-lg {% if form.building.errors %}is-invalid{% endif %}"
-                                    {% if not buildings %}disabled{% endif %}
                                     required>
                                 <option value="">-- Выберите здание для сноса --</option>
                                 {% for building in buildings %}
@@ -184,7 +183,6 @@
                                        class="form-control form-control-lg {% if form.demolisher_id.errors %}is-invalid{% endif %}"
                                        value="{{ form.demolisher_id.value|default:'' }}"
                                        placeholder="Введите номер игрока (кто производит снос)"
-                                       {% if not buildings %}disabled{% endif %}
                                        required>
                                 <button class="btn btn-outline-secondary" type="button" id="checkDemolisherBtn">
                                     <i class="bi bi-search"></i>

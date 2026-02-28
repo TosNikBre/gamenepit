@@ -11,6 +11,34 @@ from datetime import timedelta
 import json
 
 
+def _infer_building_type_and_income(building_name, description=''):
+    """Определяет тип постройки и доход по названию/описанию прайса."""
+    text = f"{building_name or ''} {description or ''}".lower()
+
+    income_map = {
+        'маленький магазин': 2,
+        'ресторан': 5,
+        'таверна': 4,
+        'гостиница': 8,
+        'рынок': 10,
+    }
+
+    for key, value in income_map.items():
+        if key in text:
+            return 'business', value
+
+    if any(keyword in text for keyword in ('магазин', 'ресторан', 'таверн', 'гостиниц', 'рынок', 'бизнес')):
+        return 'business', 5
+
+    if any(keyword in text for keyword in ('фабрик', 'ферм', 'плантац', 'завод')):
+        return 'factory', 0
+
+    if any(keyword in text for keyword in ('дом', 'особняк', 'жиль')):
+        return 'residential', 0
+
+    return 'other', 0
+
+
 def player_search(request):
     """Поиск игрока по номеру"""
     session_id = request.session.get('session_id')
@@ -566,14 +594,19 @@ def island_build(request):
             building = form.cleaned_data['building']
             player_id = form.cleaned_data['player_id']
             
+            building_type, income_per_minute = _infer_building_type_and_income(
+                building.name,
+                building.description,
+            )
+
             # Создаем запись о построенном здании
             constructed = ConstructedBuilding.objects.create(
                 building_name=building.name,
-                building_type='other',  # По умолчанию, нужно уточнять
+                building_type=building_type,
                 owner_id=player_id,
                 built_by=request.current_user,
                 cost=building.base_price,
-                income_per_minute=5  # Значение по умолчанию
+                income_per_minute=income_per_minute
             )
             
             # Запись в лог
@@ -702,6 +735,22 @@ def island_profit(request):
     if not session_id:
         return redirect('login')
     
+    # Автонормализация старых построек: раньше все создавались как 'other'
+    normalized = 0
+    for building in ConstructedBuilding.objects.filter(building_type='other'):
+        inferred_type, inferred_income = _infer_building_type_and_income(building.building_name)
+        if inferred_type != 'other':
+            building.building_type = inferred_type
+            if inferred_type == 'business' and building.income_per_minute <= 0:
+                building.income_per_minute = inferred_income or 5
+                building.save(update_fields=['building_type', 'income_per_minute'])
+            else:
+                building.save(update_fields=['building_type'])
+            normalized += 1
+
+    if normalized:
+        print(f"Нормализовано построек по типам: {normalized}")
+
     # Получаем все бизнесы (здания типа business)
     businesses = ConstructedBuilding.objects.filter(building_type='business').order_by('-last_profit_collected')
     
