@@ -1,0 +1,420 @@
+{% extends 'base.html' %}
+
+{% block title %}Выдача кредита - Великобритания{% endblock %}
+
+{% block extra_css %}
+<style>
+    .calculator-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .payment-schedule {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .payment-item {
+        transition: all 0.3s;
+    }
+    .payment-item:hover {
+        background-color: #f8f9fa;
+        transform: translateX(5px);
+    }
+    .interest-badge {
+        font-size: 1.2rem;
+        padding: 10px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.2);
+    }
+    .summary-card {
+        border-left: 4px solid #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-bank"></i> Выдача кредита</h2>
+            <div>
+                <span class="badge bg-primary badge-custom me-2">
+                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
+                </span>
+                <a href="{% url 'britain_credits' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> К кредитам
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Банк Великобритании - кредитование под залог</p>
+    </div>
+
+    <div class="row">
+        <!-- Форма выдачи кредита -->
+        <div class="col-md-7 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Новый кредит</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="creditIssueForm" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <!-- Номер игрока -->
+                        <div class="mb-4">
+                            <label for="{{ form.player_id.id_for_label }}" class="form-label fw-bold">
+                                {{ form.player_id.label }} <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">#</span>
+                                <input type="text" 
+                                       name="{{ form.player_id.name }}"
+                                       id="{{ form.player_id.id_for_label }}"
+                                       class="form-control form-control-lg {% if form.player_id.errors %}is-invalid{% endif %}"
+                                       value="{{ form.player_id.value|default:'' }}"
+                                       placeholder="Введите номер игрока"
+                                       required>
+                                <button class="btn btn-outline-secondary" type="button" id="checkPlayerBtn">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                            {% if form.player_id.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.player_id.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text" id="playerInfo"></div>
+                        </div>
+
+                        <!-- Сумма кредита -->
+                        <div class="mb-4">
+                            <label for="{{ form.credit_amount.id_for_label }}" class="form-label fw-bold">
+                                {{ form.credit_amount.label }} <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" 
+                                       name="{{ form.credit_amount.name }}"
+                                       id="{{ form.credit_amount.id_for_label }}"
+                                       class="form-control form-control-lg {% if form.credit_amount.errors %}is-invalid{% endif %}"
+                                       value="{{ form.credit_amount.value|default:'' }}"
+                                       step="0.01"
+                                       min="100"
+                                       placeholder="0.00"
+                                       required>
+                                <span class="input-group-text">₽</span>
+                                {% if form.credit_amount.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.credit_amount.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="form-text">Минимальная сумма кредита: 100 ₽</div>
+                        </div>
+
+                        <!-- Срок кредита -->
+                        <div class="mb-4">
+                            <label for="{{ form.term.id_for_label }}" class="form-label fw-bold">
+                                {{ form.term.label }} <span class="text-danger">*</span>
+                            </label>
+                            <select name="{{ form.term.name }}"
+                                    id="{{ form.term.id_for_label }}"
+                                    class="form-control form-control-lg {% if form.term.errors %}is-invalid{% endif %}"
+                                    required>
+                                <option value="">-- Выберите срок --</option>
+                                {% for value, label in form.fields.term.choices %}
+                                    <option value="{{ value }}" 
+                                            {% if form.term.value == value %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if form.term.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.term.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Калькулятор кредита -->
+                        <div class="calculator-card mb-4">
+                            <h5 class="mb-3">📊 Расчет кредита</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small>Сумма кредита:</small>
+                                    <h4 id="calcAmount">0 ₽</h4>
+                                </div>
+                                <div class="col-md-6">
+                                    <small>Процентная ставка:</small>
+                                    <h4>50% <span class="interest-badge">годовых</span></h4>
+                                </div>
+                            </div>
+                            <hr class="bg-white">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small>Ежемесячный платеж:</small>
+                                    <h3 id="monthlyPayment">0 ₽</h3>
+                                </div>
+                                <div class="col-md-6">
+                                    <small>Общая сумма к выплате:</small>
+                                    <h3 id="totalPayment">0 ₽</h3>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- График платежей -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0"><i class="bi bi-calendar-check"></i> График платежей</h5>
+                            </div>
+                            <div class="card-body payment-schedule">
+                                <table class="table table-sm" id="paymentSchedule">
+                                    <thead>
+                                        <tr>
+                                            <th>Месяц</th>
+                                            <th>Платеж</th>
+                                            <th>Остаток долга</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="scheduleBody">
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted">
+                                                Введите данные для расчета
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Подтверждение -->
+                        <div class="card summary-card mb-4">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <small>Игрок:</small>
+                                        <h5 id="summaryPlayer">—</h5>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small>Сумма кредита:</small>
+                                        <h5 id="summaryAmount">0 ₽</h5>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-6">
+                                        <small>Срок:</small>
+                                        <h5 id="summaryTerm">—</h5>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small>Ежемесячный платеж:</small>
+                                        <h5 id="summaryMonthly">0 ₽</h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'britain_credits' %}" class="btn btn-secondary btn-lg me-md-2">
+                                <i class="bi bi-x-circle"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn">
+                                <i class="bi bi-check-circle"></i> Выдать кредит
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информационная панель -->
+        <div class="col-md-5 mb-4">
+            <!-- Условия кредитования -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Условия кредитования</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-3">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            <strong>Процентная ставка:</strong> 50% от суммы
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            <strong>Срок:</strong> от 2 до 6 месяцев
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            <strong>Формула расчета:</strong> (Сумма / Срок) × 1.5
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                            <strong>Просрочка платежа:</strong> более 10 минут
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Активные кредиты игрока -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-credit-card"></i> Активные кредиты игрока</h5>
+                </div>
+                <div class="card-body" id="playerCredits">
+                    <p class="text-muted text-center mb-0">
+                        Введите номер игрока для просмотра
+                    </p>
+                </div>
+            </div>
+
+            <!-- Последние выданные кредиты -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние выданные кредиты</h5>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    {% for credit in recent_credits|slice:":10" %}
+                    <div class="border-bottom mb-2 pb-2">
+                        <div class="d-flex justify-content-between">
+                            <span><strong>#{{ credit.player_id }}</strong></span>
+                            <span class="badge bg-primary">{{ credit.amount }} ₽</span>
+                        </div>
+                        <small class="text-muted">
+                            Срок: {{ credit.term }} мес • {{ credit.timestamp|date:"d.m.Y H:i" }}
+                        </small>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center mb-0">Нет выданных кредитов</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Элементы формы
+    const playerInput = document.getElementById('{{ form.player_id.id_for_label }}');
+    const amountInput = document.getElementById('{{ form.credit_amount.id_for_label }}');
+    const termSelect = document.getElementById('{{ form.term.id_for_label }}');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Элементы отображения
+    const calcAmount = document.getElementById('calcAmount');
+    const monthlyPayment = document.getElementById('monthlyPayment');
+    const totalPayment = document.getElementById('totalPayment');
+    const scheduleBody = document.getElementById('scheduleBody');
+    const summaryPlayer = document.getElementById('summaryPlayer');
+    const summaryAmount = document.getElementById('summaryAmount');
+    const summaryTerm = document.getElementById('summaryTerm');
+    const summaryMonthly = document.getElementById('summaryMonthly');
+    const playerInfo = document.getElementById('playerInfo');
+    const playerCredits = document.getElementById('playerCredits');
+
+    // Функция расчета ежемесячного платежа
+    function calculateMonthly(amount, term) {
+        // (Сумма / Срок) * 1.5
+        return (amount / term) * 1.5;
+    }
+
+    // Функция обновления калькулятора
+    function updateCalculator() {
+        const amount = parseFloat(amountInput.value) || 0;
+        const term = parseInt(termSelect.value) || 0;
+        
+        if (amount > 0 && term > 0) {
+            const monthly = calculateMonthly(amount, term);
+            const total = monthly * term;
+            
+            // Обновляем отображение
+            calcAmount.textContent = amount.toFixed(2) + ' ₽';
+            monthlyPayment.textContent = monthly.toFixed(2) + ' ₽';
+            totalPayment.textContent = total.toFixed(2) + ' ₽';
+            
+            // Обновляем график платежей
+            updatePaymentSchedule(amount, term, monthly);
+            
+            // Обновляем сводку
+            summaryAmount.textContent = amount.toFixed(2) + ' ₽';
+            summaryTerm.textContent = term + ' мес';
+            summaryMonthly.textContent = monthly.toFixed(2) + ' ₽';
+        } else {
+            calcAmount.textContent = '0 ₽';
+            monthlyPayment.textContent = '0 ₽';
+            totalPayment.textContent = '0 ₽';
+            scheduleBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Введите данные для расчета</td></tr>';
+            summaryAmount.textContent = '0 ₽';
+            summaryTerm.textContent = '—';
+            summaryMonthly.textContent = '0 ₽';
+        }
+    }
+
+    // Функция обновления графика платежей
+    function updatePaymentSchedule(amount, term, monthly) {
+        let remaining = amount;
+        let scheduleHtml = '';
+        
+        for (let i = 1; i <= term; i++) {
+            remaining -= monthly;
+            if (remaining < 0) remaining = 0;
+            
+            scheduleHtml += `
+                <tr class="payment-item">
+                    <td>${i}</td>
+                    <td>${monthly.toFixed(2)} ₽</td>
+                    <td>${remaining.toFixed(2)} ₽</td>
+                </tr>
+            `;
+        }
+        
+        scheduleBody.innerHTML = scheduleHtml;
+    }
+
+    // Функция проверки игрока
+    function checkPlayer() {
+        const playerId = playerInput.value.trim();
+        
+        if (playerId) {
+            summaryPlayer.textContent = '#' + playerId;
+            playerInfo.innerHTML = `<span class="text-success">✓ Игрок #${playerId} найден</span>`;
+            
+            // Здесь должен быть AJAX запрос для получения кредитов игрока
+            playerCredits.innerHTML = `
+                <div class="alert alert-info">
+                    <small>Активных кредитов: 0</small><br>
+                    <small>Общая задолженность: 0 ₽</small>
+                </div>
+            `;
+        } else {
+            summaryPlayer.textContent = '—';
+            playerInfo.innerHTML = '';
+            playerCredits.innerHTML = '<p class="text-muted text-center mb-0">Введите номер игрока для просмотра</p>';
+        }
+    }
+
+    // События
+    playerInput.addEventListener('blur', checkPlayer);
+    amountInput.addEventListener('input', updateCalculator);
+    termSelect.addEventListener('change', updateCalculator);
+    
+    document.getElementById('checkPlayerBtn').addEventListener('click', checkPlayer);
+
+    // Инициализация
+    updateCalculator();
+    if (playerInput.value) {
+        checkPlayer();
+    }
+});
+</script>
+{% endblock %}

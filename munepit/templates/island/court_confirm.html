@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Подтверждение приговора{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-warning">
+                <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Подтверждение приговора</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger">
+                    <i class="bi bi-gavel"></i> Приговор суда
+                </div>
+                
+                <table class="table table-bordered">
+                    <tr>
+                        <th style="width: 30%">Номер подсудимого:</th>
+                        <td>{{ convict.player_id }}</td>
+                    </tr>
+                    <tr>
+                        <th>ФИО игрока:</th>
+                        <td>{{ convict.player_name|default:'Не указано' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Описание преступления:</th>
+                        <td>{{ convict.crime }}</td>
+                    </tr>
+                    <tr>
+                        <th>Сумма штрафа:</th>
+                        <td>{{ convict.fine }} ₽</td>
+                    </tr>
+                    <tr>
+                        <th>Конфискация имущества:</th>
+                        <td>
+                            {% if convict.confiscation %}
+                                <span class="badge bg-danger">Да</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Нет</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Срок каторги:</th>
+                        <td>
+                            {% if convict.sentence > 0 %}
+                                {{ convict.sentence }} лет
+                                <span class="badge bg-warning">Отправляется на каторгу</span>
+                            {% else %}
+                                0 лет
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Судья:</th>
+                        <td>{{ request.session.username }}</td>
+                    </tr>
+                </table>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'island_court' %}" class="btn btn-secondary me-md-2">
+                            <i class="bi bi-arrow-left"></i> Назад
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-check-lg"></i> Подтвердить приговор
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

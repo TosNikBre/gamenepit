@@ -1,0 +1,70 @@
+
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h3 class="card-title mb-0">История сделок</h3>
+            </div>
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Тип</th>
+                            <th>Покупатель</th>
+                            <th>Продавец</th>
+                            <th>Товар</th>
+                            <th>Количество</th>
+                            <th>Сумма</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>{{ transaction.date_created|date:"d.m.Y H:i" }}</td>
+                            <td>
+                                {% if transaction.transaction_type == 'building' %}
+                                    <span class="badge bg-warning">Здание</span>
+                                {% else %}
+                                    <span class="badge bg-success">Ресурс</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ transaction.buyer }}</td>
+                            <td>
+                                {% if transaction.seller %}
+                                    {{ transaction.seller }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if transaction.building %}
+                                    {{ transaction.building.display_name }}
+                                {% elif transaction.resource %}
+                                    {{ transaction.resource.display_name }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if transaction.resource_quantity %}
+                                    {{ transaction.resource_quantity }}
+                                {% else %}
+                                    1
+                                {% endif %}
+                            </td>
+                            <td>{{ transaction.amount }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center">Пока нет ни одной сделки</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <a href="{% url 'index' %}" class="btn btn-secondary">На главную</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

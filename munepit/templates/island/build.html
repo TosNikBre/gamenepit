@@ -1,0 +1,499 @@
+{% extends 'base.html' %}
+
+{% block title %}Постройка здания - Остров{% endblock %}
+
+{% block extra_css %}
+<style>
+    .building-card {
+        transition: all 0.3s;
+        cursor: pointer;
+        border: 2px solid transparent;
+        height: 100%;
+    }
+    .building-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    .building-card.selected {
+        border-color: #28a745;
+        background-color: #f0fff0;
+    }
+    .building-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+    .building-price {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #28a745;
+    }
+    .requirements-list {
+        list-style: none;
+        padding: 0;
+        margin: 10px 0;
+    }
+    .requirements-list li {
+        padding: 5px 0;
+        border-bottom: 1px dashed #dee2e6;
+    }
+    .requirements-list li:last-child {
+        border-bottom: none;
+    }
+    .resource-badge {
+        background: #e9ecef;
+        padding: 3px 8px;
+        border-radius: 15px;
+        font-size: 0.9rem;
+    }
+    .construction-time {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-building"></i> Постройка здания</h2>
+            <div>
+               
+                <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Строительство новых зданий на острове</p>
+    </div>
+
+    <div class="row">
+        <!-- Форма постройки -->
+        <div class="col-md-8 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-hammer"></i> Новое строительство</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="buildForm" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <!-- Выбор здания (визуальные карточки) -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Выберите тип здания <span class="text-danger">*</span></label>
+                            <div class="row" id="buildingCards">
+                                {% for building in form.fields.building.queryset %}
+                                <div class="col-md-6 mb-3">
+                                    <div class="card building-card" data-building-id="{{ building.id }}" 
+                                         data-building-name="{{ building.name }}"
+                                         data-building-price="{{ building.base_price }}"
+                                         data-building-type="{{ building.category }}"
+                                         onclick="selectBuilding('{{ building.id }}')">
+                                        <div class="card-body text-center">
+                                            <div class="building-icon">
+                                                {% if 'factory' in building.name|lower %}
+                                                    🏭
+                                                {% elif 'shop' in building.name|lower or 'магазин' in building.name|lower %}
+                                                    🏪
+                                                {% elif 'house' in building.name|lower or 'дом' in building.name|lower %}
+                                                    🏠
+                                                {% elif 'warehouse' in building.name|lower or 'склад' in building.name|lower %}
+                                                    📦
+                                                {% elif 'farm' in building.name|lower or 'ферма' in building.name|lower %}
+                                                    🌾
+                                                {% else %}
+                                                    🏗️
+                                                {% endif %}
+                                            </div>
+                                            <h6>{{ building.name }}</h6>
+                                            <div class="building-price">{{ building.base_price }} ₽</div>
+                                            <small class="text-muted">{{ building.get_category_display }}</small>
+                                            
+                                            <!-- Характеристики -->
+                                            <div class="mt-2">
+                                                <span class="resource-badge">
+                                                    <i class="bi bi-arrow-up"></i> +50 к производству
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% empty %}
+                                <div class="col-12">
+                                    <div class="alert alert-warning">
+                                        Нет доступных зданий для постройки. Сначала добавьте их в прайс-лист.
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="{{ form.building.name }}" id="{{ form.building.id_for_label }}" value="{{ form.building.value|default:'' }}">
+                            {% if form.building.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.building.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Номер игрока (владелец) -->
+                        <div class="mb-4">
+                            <label for="{{ form.player_id.id_for_label }}" class="form-label fw-bold">
+                                {{ form.player_id.label }} <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">#</span>
+                                <input type="text" 
+                                       name="{{ form.player_id.name }}"
+                                       id="{{ form.player_id.id_for_label }}"
+                                       class="form-control form-control-lg {% if form.player_id.errors %}is-invalid{% endif %}"
+                                       value="{{ form.player_id.value|default:'' }}"
+                                       placeholder="Введите номер игрока"
+                                       required>
+                                <button class="btn btn-outline-secondary" type="button" id="checkPlayerBtn">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                            {% if form.player_id.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.player_id.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text" id="playerInfo"></div>
+                        </div>
+
+                        <!-- Информация о здании -->
+                        <div class="card bg-light mb-4" id="buildingInfo" style="display: none;">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Выбранное здание:</h6>
+                                        <h4 id="selectedBuildingName">—</h4>
+                                        <p class="mb-1">Тип: <span id="selectedBuildingType">—</span></p>
+                                        <p class="mb-1">Стоимость: <strong id="selectedBuildingPrice">0</strong> ₽</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="construction-time">
+                                            <i class="bi bi-clock"></i>
+                                            <div class="mt-2">Время строительства: <strong>1 ход</strong></div>
+                                            <small>Здание будет построено сразу</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Необходимые ресурсы -->
+                        <div class="card mb-4" id="resourcesRequired" style="display: none;">
+                            <div class="card-header bg-warning">
+                                <h5 class="mb-0"><i class="bi bi-box"></i> Необходимые ресурсы</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="text-center">
+                                            <i class="bi bi-tree fs-1"></i>
+                                            <h6>Древесина</h6>
+                                            <span id="woodRequired">100</span> ед.
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="text-center">
+                                            <i class="bi bi-stone fs-1"></i>
+                                            <h6>Камень</h6>
+                                            <span id="stoneRequired">50</span> ед.
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="text-center">
+                                            <i class="bi bi-tools fs-1"></i>
+                                            <h6>Инструменты</h6>
+                                            <span id="toolsRequired">20</span> ед.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Итоговая стоимость -->
+                        <div class="card bg-success text-white mb-4">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h5 class="mb-0">Итого к оплате:</h5>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h2 class="mb-0 text-end" id="totalCost">0 ₽</h2>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'island_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
+                                <i class="bi bi-x-circle"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn" disabled>
+                                <i class="bi bi-check-circle"></i> Построить здание
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информационная панель -->
+        <div class="col-md-4 mb-4">
+            <!-- Информация об игроке -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-person"></i> Информация об игроке</h5>
+                </div>
+                <div class="card-body" id="playerDetails">
+                    <p class="text-muted mb-0">Введите номер игрока для просмотра</p>
+                </div>
+            </div>
+
+            <!-- Характеристики зданий -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Характеристики зданий</h5>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="buildingAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#factoryInfo">
+                                    🏭 Фабрики
+                                </button>
+                            </h2>
+                            <div id="factoryInfo" class="accordion-collapse collapse show" data-bs-parent="#buildingAccordion">
+                                <div class="accordion-body">
+                                    <ul class="requirements-list">
+                                        <li><i class="bi bi-check-circle text-success"></i> Производят ресурсы</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Требуют рабочих</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Доход: 100-500 ₽/ход</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#businessInfo">
+                                    🏪 Бизнесы
+                                </button>
+                            </h2>
+                            <div id="businessInfo" class="accordion-collapse collapse" data-bs-parent="#buildingAccordion">
+                                <div class="accordion-body">
+                                    <ul class="requirements-list">
+                                        <li><i class="bi bi-check-circle text-success"></i> Приносят прибыль</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Доход: 50-200 ₽/минута</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Требуют товары</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#houseInfo">
+                                    🏠 Жилые дома
+                                </button>
+                            </h2>
+                            <div id="houseInfo" class="accordion-collapse collapse" data-bs-parent="#buildingAccordion">
+                                <div class="accordion-body">
+                                    <ul class="requirements-list">
+                                        <li><i class="bi bi-check-circle text-success"></i> Увеличивают население</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Дают рабочих</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Вместимость: 10 чел</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Последние постройки -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние постройки</h5>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    {% for building in recent_buildings|slice:":10" %}
+                    <div class="border-bottom mb-2 pb-2">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>{{ building.building_name }}</strong>
+                                <br><small class="text-muted">Игрок #{{ building.owner_id }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success">{{ building.cost }} ₽</span>
+                                <br><small class="text-muted">{{ building.built_at|time:"H:i" }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center mb-0">Нет построек</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Элементы формы
+    const buildingInput = document.getElementById('{{ form.building.id_for_label }}');
+    const playerInput = document.getElementById('{{ form.player_id.id_for_label }}');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Информационные элементы
+    const buildingInfo = document.getElementById('buildingInfo');
+    const resourcesRequired = document.getElementById('resourcesRequired');
+    const selectedBuildingName = document.getElementById('selectedBuildingName');
+    const selectedBuildingType = document.getElementById('selectedBuildingType');
+    const selectedBuildingPrice = document.getElementById('selectedBuildingPrice');
+    const totalCost = document.getElementById('totalCost');
+    const playerInfo = document.getElementById('playerInfo');
+    const playerDetails = document.getElementById('playerDetails');
+    
+    // Хранилище выбранного здания
+    let selectedBuilding = null;
+    
+    // Функция выбора здания
+    window.selectBuilding = function(buildingId) {
+        // Находим карточку
+        const card = document.querySelector(`[data-building-id="${buildingId}"]`);
+        
+        if (card) {
+            // Убираем выделение со всех карточек
+            document.querySelectorAll('.building-card').forEach(c => {
+                c.classList.remove('selected');
+            });
+            
+            // Выделяем выбранную карточку
+            card.classList.add('selected');
+            
+            // Сохраняем данные
+            selectedBuilding = {
+                id: buildingId,
+                name: card.dataset.buildingName,
+                price: parseFloat(card.dataset.buildingPrice),
+                type: card.dataset.buildingType
+            };
+            
+            // Устанавливаем значение в скрытое поле
+            buildingInput.value = buildingId;
+            
+            // Обновляем информацию
+            updateBuildingInfo();
+        }
+    };
+    
+    // Функция обновления информации о здании
+    function updateBuildingInfo() {
+        if (selectedBuilding) {
+            buildingInfo.style.display = 'block';
+            resourcesRequired.style.display = 'block';
+            selectedBuildingName.textContent = selectedBuilding.name;
+            selectedBuildingType.textContent = selectedBuilding.type;
+            selectedBuildingPrice.textContent = selectedBuilding.price.toFixed(2);
+            totalCost.textContent = selectedBuilding.price.toFixed(2) + ' ₽';
+            
+            // Обновляем требуемые ресурсы в зависимости от типа здания
+            if (selectedBuilding.type === 'factory') {
+                document.getElementById('woodRequired').textContent = '200';
+                document.getElementById('stoneRequired').textContent = '100';
+                document.getElementById('toolsRequired').textContent = '50';
+            } else if (selectedBuilding.type === 'business') {
+                document.getElementById('woodRequired').textContent = '100';
+                document.getElementById('stoneRequired').textContent = '50';
+                document.getElementById('toolsRequired').textContent = '30';
+            } else {
+                document.getElementById('woodRequired').textContent = '50';
+                document.getElementById('stoneRequired').textContent = '25';
+                document.getElementById('toolsRequired').textContent = '10';
+            }
+            
+            // Проверяем возможность постройки
+            checkBuildPossibility();
+        } else {
+            buildingInfo.style.display = 'none';
+            resourcesRequired.style.display = 'none';
+            totalCost.textContent = '0 ₽';
+            submitBtn.disabled = true;
+        }
+    }
+    
+    // Функция проверки игрока
+    function checkPlayer() {
+        const playerId = playerInput.value.trim();
+        
+        if (playerId) {
+            // Здесь должен быть AJAX запрос для проверки игрока
+            playerInfo.innerHTML = `<span class="text-success">✓ Игрок #${playerId} найден</span>`;
+            
+            // Показываем информацию об игроке
+            playerDetails.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-person-circle fs-1"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h6>Игрок #${playerId}</h6>
+                        <p class="mb-1"><i class="bi bi-building"></i> Построек: 0</p>
+                        <p class="mb-1"><i class="bi bi-cash"></i> Баланс: 10,000 ₽</p>
+                        <small class="text-muted">Последняя активность: сегодня</small>
+                    </div>
+                </div>
+            `;
+            
+            checkBuildPossibility();
+        } else {
+            playerInfo.innerHTML = '';
+            playerDetails.innerHTML = '<p class="text-muted mb-0">Введите номер игрока для просмотра</p>';
+            submitBtn.disabled = true;
+        }
+    }
+    
+    // Функция проверки возможности постройки
+    function checkBuildPossibility() {
+        const playerId = playerInput.value.trim();
+        
+        if (selectedBuilding && playerId) {
+            // Здесь можно добавить проверку наличия ресурсов
+            submitBtn.disabled = false;
+        } else {
+            submitBtn.disabled = true;
+        }
+    }
+    
+    // События
+    document.getElementById('checkPlayerBtn').addEventListener('click', checkPlayer);
+    playerInput.addEventListener('blur', checkPlayer);
+    playerInput.addEventListener('input', function() {
+        if (!this.value) {
+            playerInfo.innerHTML = '';
+            playerDetails.innerHTML = '<p class="text-muted mb-0">Введите номер игрока для просмотра</p>';
+            submitBtn.disabled = true;
+        }
+    });
+    
+    // Инициализация
+    if (buildingInput.value) {
+        selectBuilding(buildingInput.value);
+    }
+});
+</script>
+{% endblock %}

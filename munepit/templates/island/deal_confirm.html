@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Подтверждение сделки{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="bi bi-check-circle"></i> Подтверждение сделки</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Проверьте правильность введенных данных
+                </div>
+                
+                <table class="table table-bordered">
+                    <tr>
+                        <th style="width: 30%">Игрок A:</th>
+                        <td>{{ deal.player_a }}</td>
+                    </tr>
+                    <tr>
+                        <th>Игрок B:</th>
+                        <td>{{ deal.player_b }}</td>
+                    </tr>
+                    <tr>
+                        <th>Описание сделки:</th>
+                        <td>{{ deal.description|linebreaks }}</td>
+                    </tr>
+                    <tr>
+                        <th>Автор:</th>
+                        <td>{{ request.session.username }}</td>
+                    </tr>
+                    <tr>
+                        <th>Время:</th>
+                        <td>{% now "d.m.Y H:i:s" %}</td>
+                    </tr>
+                </table>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'island_deal' %}" class="btn btn-secondary me-md-2">
+                            <i class="bi bi-arrow-left"></i> Назад
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-lg"></i> Подтвердить сделку
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

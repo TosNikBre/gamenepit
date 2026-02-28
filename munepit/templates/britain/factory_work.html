@@ -1,0 +1,538 @@
+{% extends 'base.html' %}
+
+{% block title %}Работа на заводе - Великобритания{% endblock %}
+
+{% block extra_css %}
+<style>
+    .gear-icon {
+        font-size: 48px;
+        color: #6c757d;
+        animation: rotate 10s linear infinite;
+    }
+    @keyframes rotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .production-line {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    .stat-card {
+        transition: all 0.3s;
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .gear-badge {
+        background: #28a745;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+    }
+    .progress {
+        height: 10px;
+        border-radius: 5px;
+    }
+    .progress-bar {
+        background: linear-gradient(90deg, #28a745, #20c997);
+        transition: width 1s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-gear"></i> Работа на заводе</h2>
+            <div>
+                <span class="badge bg-primary badge-custom me-2">
+                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
+                </span>
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Промышленный комплекс Великобритании - производство шестерен</p>
+    </div>
+
+    <!-- Производственная линия (анимация) -->
+    <div class="production-line text-center mb-4">
+        <div class="row align-items-center">
+            <div class="col-md-2">
+                <i class="bi bi-gear gear-icon"></i>
+            </div>
+            <div class="col-md-8">
+                <h4 class="mb-2">Завод работает на полную мощность</h4>
+                <div class="progress">
+                    <div class="progress-bar" id="productionProgress" style="width: 75%;"></div>
+                </div>
+                <p class="mt-2 mb-0">Произведено <span id="totalGears">{{ total_gears|default:'0' }}</span> шестерен за смену</p>
+            </div>
+            <div class="col-md-2">
+                <span class="gear-badge">
+                    <i class="bi bi-gear"></i> {{ price_per_gear|default:'2' }} ₽/шт
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Форма работы -->
+        <div class="col-md-7 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-tools"></i> Оформление работы</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="factoryWorkForm" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <!-- Номер игрока -->
+                        <div class="mb-4">
+                            <label for="{{ form.player_id.id_for_label }}" class="form-label fw-bold">
+                                {{ form.player_id.label }} <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   name="{{ form.player_id.name }}"
+                                   id="{{ form.player_id.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.player_id.errors %}is-invalid{% endif %}"
+                                   value="{{ form.player_id.value|default:'' }}"
+                                   placeholder="Введите номер игрока"
+                                   required>
+                            {% if form.player_id.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.player_id.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">Номер игрока-работника</div>
+                        </div>
+
+                        <!-- Количество шестерен -->
+                        <div class="mb-4">
+                            <label for="{{ form.quantity.id_for_label }}" class="form-label fw-bold">
+                                {{ form.quantity.label }} <span class="text-danger">*</span>
+                            </label>
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <input type="number" 
+                                           name="{{ form.quantity.name }}"
+                                           id="{{ form.quantity.id_for_label }}"
+                                           class="form-control form-control-lg {% if form.quantity.errors %}is-invalid{% endif %}"
+                                           value="{{ form.quantity.value|default:'1' }}"
+                                           min="1"
+                                           max="1000"
+                                           step="1"
+                                           required>
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-control form-control-lg" id="quickQuantity">
+                                        <option value="">Быстрый выбор</option>
+                                        <option value="10">10 шт</option>
+                                        <option value="25">25 шт</option>
+                                        <option value="50">50 шт</option>
+                                        <option value="100">100 шт</option>
+                                        <option value="500">500 шт</option>
+                                    </select>
+                                </div>
+                            </div>
+                            {% if form.quantity.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.quantity.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Калькулятор -->
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="mb-2">Цена за шестерню:</h6>
+                                        <div class="d-flex align-items-center">
+                                            <span class="display-6 me-3" id="pricePerUnit">{{ price_per_gear|default:'2' }}</span>
+                                            <span class="badge bg-secondary">₽</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="mb-2">Итого к оплате:</h6>
+                                        <div class="d-flex align-items-center">
+                                            <span class="display-6 text-success me-3" id="totalPrice">0</span>
+                                            <span class="badge bg-success">₽</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Шкала производительности -->
+                                <div class="mt-3">
+                                    <small class="text-muted">Производительность:</small>
+                                    <div class="progress mt-1">
+                                        <div class="progress-bar bg-info" id="efficiencyBar" style="width: 100%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Внесено денег -->
+                        <div class="mb-4">
+                            <label for="{{ form.money_input.id_for_label }}" class="form-label fw-bold">
+                                {{ form.money_input.label }} <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" 
+                                       name="{{ form.money_input.name }}"
+                                       id="{{ form.money_input.id_for_label }}"
+                                       class="form-control form-control-lg {% if form.money_input.errors %}is-invalid{% endif %}"
+                                       value="{{ form.money_input.value|default:'' }}"
+                                       step="0.01"
+                                       min="0"
+                                       placeholder="0.00"
+                                       required>
+                                <span class="input-group-text">₽</span>
+                                {% if form.money_input.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.money_input.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Блок сдачи -->
+                        <div class="card bg-success text-white mb-4" id="changeBlock" style="display: none;">
+                            <div class="card-body">
+                                <h5 class="mb-0">Сдача: <span id="changeAmount">0.00</span> ₽</h5>
+                            </div>
+                        </div>
+
+                        <!-- Блок ошибки -->
+                        <div class="alert alert-danger mb-4" id="errorBlock" style="display: none;">
+                            <i class="bi bi-exclamation-triangle"></i> 
+                            Недостаточно средств! Требуется: <span id="requiredAmount">0.00</span> ₽
+                        </div>
+
+                        <!-- Дополнительные опции -->
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="urgentOrder">
+                                <label class="form-check-label" for="urgentOrder">
+                                    Срочный заказ (+50% к стоимости)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="qualityControl">
+                                <label class="form-check-label" for="qualityControl">
+                                    Контроль качества (+25% к стоимости)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'britain_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
+                                <i class="bi bi-x-circle"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn" disabled>
+                                <i class="bi bi-check-circle"></i> Оплатить работу
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информационная панель -->
+        <div class="col-md-5 mb-4">
+            <!-- Статистика завода -->
+            <div class="row mb-3">
+                <div class="col-6">
+                    <div class="card stat-card bg-primary text-white">
+                        <div class="card-body">
+                            <h6>Сегодня произведено</h6>
+                            <h3>{{ today_production|default:'0' }}</h3>
+                            <small>шестерен</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card stat-card bg-success text-white">
+                        <div class="card-body">
+                            <h6>Выручка за день</h6>
+                            <h3>{{ today_revenue|default:'0' }} ₽</h3>
+                            <small>заработок</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-6">
+                    <div class="card stat-card bg-info text-white">
+                        <div class="card-body">
+                            <h6>Лучший работник</h6>
+                            <h5>#{{ best_worker|default:'1245' }}</h5>
+                            <small>{{ best_worker_count|default:'245' }} шестерен</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card stat-card bg-warning text-white">
+                        <div class="card-body">
+                            <h6>Средняя смена</h6>
+                            <h3>{{ avg_shift|default:'32' }}</h3>
+                            <small>шестерен</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Цены и тарифы -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-tag"></i> Тарифы</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td>Базовая цена шестерни:</td>
+                            <td class="text-end"><strong>{{ price_per_gear|default:'2' }} ₽</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Срочный заказ:</td>
+                            <td class="text-end"><strong>+50%</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Контроль качества:</td>
+                            <td class="text-end"><strong>+25%</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Оптовая скидка (от 100 шт):</td>
+                            <td class="text-end"><strong class="text-success">-10%</strong></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- История работ -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние работы</h5>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    <div class="list-group">
+                        {% for work in recent_works|slice:":10" %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <strong>#{{ work.player_id }}</strong>
+                                    <span class="badge bg-secondary">{{ work.quantity }} шт</span>
+                                </div>
+                                <div>
+                                    <span class="badge bg-success">{{ work.total }} ₽</span>
+                                    <small class="text-muted">{{ work.timestamp|time:"H:i" }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center text-muted py-3">
+                            Нет работ за последнее время
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="card-footer text-center">
+                    <small class="text-muted">Всего работ сегодня: {{ today_works_count|default:'0' }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Таблица производителей -->
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="bi bi-trophy"></i> Лучшие производители сегодня</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Игрок</th>
+                            <th>Количество</th>
+                            <th>Сумма</th>
+                            <th>Последняя работа</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for worker in top_workers %}
+                        <tr>
+                            <td><strong>#{{ worker.player_id }}</strong></td>
+                            <td>{{ worker.total_quantity }} шт</td>
+                            <td>{{ worker.total_amount }} ₽</td>
+                            <td>{{ worker.last_work|time:"H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">
+                                Нет данных
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Элементы формы
+    const quantityInput = document.getElementById('{{ form.quantity.id_for_label }}');
+    const moneyInput = document.getElementById('{{ form.money_input.id_for_label }}');
+    const submitBtn = document.getElementById('submitBtn');
+    const totalPriceSpan = document.getElementById('totalPrice');
+    const changeBlock = document.getElementById('changeBlock');
+    const changeAmount = document.getElementById('changeAmount');
+    const errorBlock = document.getElementById('errorBlock');
+    const requiredAmount = document.getElementById('requiredAmount');
+    const urgentCheck = document.getElementById('urgentOrder');
+    const qualityCheck = document.getElementById('qualityControl');
+    const efficiencyBar = document.getElementById('efficiencyBar');
+    
+    // Быстрый выбор количества
+    const quickSelect = document.getElementById('quickQuantity');
+    if (quickSelect) {
+        quickSelect.addEventListener('change', function() {
+            if (this.value) {
+                quantityInput.value = this.value;
+                updateTotal();
+            }
+        });
+    }
+    
+    // Цена за шестерню (из переменной или по умолчанию)
+    const PRICE_PER_GEAR = {{ price_per_gear|default:'2' }};
+    
+    // Функция расчета итоговой суммы
+    function calculateTotal() {
+        const quantity = parseInt(quantityInput.value) || 0;
+        let price = PRICE_PER_GEAR;
+        
+        // Применяем наценки
+        if (urgentCheck.checked) {
+            price *= 1.5; // +50%
+        }
+        if (qualityCheck.checked) {
+            price *= 1.25; // +25%
+        }
+        
+        // Оптовая скидка
+        if (quantity >= 100) {
+            price *= 0.9; // -10%
+        }
+        
+        return quantity * price;
+    }
+    
+    // Функция обновления производительности
+    function updateEfficiency() {
+        const quantity = parseInt(quantityInput.value) || 0;
+        let efficiency = 100;
+        
+        if (quantity >= 100) {
+            efficiency = 110; // Оптовая надбавка к производительности
+        }
+        if (urgentCheck.checked) {
+            efficiency *= 1.2; // Срочность ускоряет производство
+        }
+        if (qualityCheck.checked) {
+            efficiency *= 0.9; // Контроль качества замедляет
+        }
+        
+        efficiencyBar.style.width = Math.min(efficiency, 150) + '%';
+    }
+    
+    // Обновление итоговой суммы
+    function updateTotal() {
+        const quantity = parseInt(quantityInput.value) || 0;
+        
+        if (quantity > 0) {
+            const total = calculateTotal();
+            totalPriceSpan.textContent = total.toFixed(2);
+            updateEfficiency();
+            
+            // Проверка достаточности средств
+            const money = parseFloat(moneyInput.value) || 0;
+            
+            if (money >= total) {
+                const change = money - total;
+                changeAmount.textContent = change.toFixed(2);
+                changeBlock.style.display = 'block';
+                errorBlock.style.display = 'none';
+                submitBtn.disabled = false;
+            } else {
+                changeBlock.style.display = 'none';
+                errorBlock.style.display = 'block';
+                requiredAmount.textContent = total.toFixed(2);
+                submitBtn.disabled = true;
+            }
+        } else {
+            totalPriceSpan.textContent = '0';
+            submitBtn.disabled = true;
+            changeBlock.style.display = 'none';
+            errorBlock.style.display = 'none';
+        }
+    }
+    
+    // События
+    quantityInput.addEventListener('input', updateTotal);
+    moneyInput.addEventListener('input', updateTotal);
+    urgentCheck.addEventListener('change', updateTotal);
+    qualityCheck.addEventListener('change', updateTotal);
+    
+    // Анимация производственной линии
+    let progress = 75;
+    setInterval(() => {
+        progress = (progress + 1) % 100;
+        document.getElementById('productionProgress').style.width = progress + '%';
+        
+        // Обновляем счетчик произведенных шестерен (рандомно для демонстрации)
+        const totalGears = parseInt(document.getElementById('totalGears').textContent) || 0;
+        if (Math.random() > 0.7) {
+            document.getElementById('totalGears').textContent = totalGears + 1;
+        }
+    }, 500);
+    
+    // Инициализация
+    updateTotal();
+    
+    // Подсказки для быстрого ввода
+    const playerInput = document.getElementById('{{ form.player_id.id_for_label }}');
+    const recentPlayers = ['1001', '1234', '5678', '9012']; // Пример недавних игроков
+    
+    playerInput.addEventListener('focus', function() {
+        if (!this.value) {
+            // Показываем подсказку с недавними игроками
+            console.log('Недавние игроки:', recentPlayers.join(', '));
+        }
+    });
+});
+</script>
+{% endblock %}

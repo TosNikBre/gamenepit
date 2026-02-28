@@ -1,0 +1,548 @@
+{% extends 'base.html' %}
+
+{% block title %}Снос здания - Остров{% endblock %}
+
+{% block extra_css %}
+<style>
+    .building-card {
+        transition: all 0.3s;
+        cursor: pointer;
+        border: 2px solid transparent;
+        height: 100%;
+    }
+    .building-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    .building-card.selected {
+        border-color: #dc3545;
+        background-color: #fff5f5;
+    }
+    .building-card.business {
+        border-left: 4px solid #28a745;
+    }
+    .building-card.factory {
+        border-left: 4px solid #007bff;
+    }
+    .building-card.house {
+        border-left: 4px solid #ffc107;
+    }
+    .building-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+    .warning-icon {
+        font-size: 72px;
+        color: #dc3545;
+        margin-bottom: 20px;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+    .profit-amount {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #28a745;
+    }
+    .demolition-cost {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #dc3545;
+    }
+    .compensation-box {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .warning-box {
+        background: linear-gradient(135deg, #dc3545, #c82333);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .info-row:last-child {
+        border-bottom: none;
+    }
+    .info-label {
+        font-weight: 600;
+        color: #6c757d;
+    }
+    .info-value {
+        font-size: 1.1rem;
+    }
+    .confirm-checkbox {
+        transform: scale(1.5);
+        margin-right: 10px;
+    }
+    .confirm-label {
+        font-size: 1.1rem;
+        color: #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-building-slash"></i> Снос здания</h2>
+            <div>
+        
+                <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Демонтаж построек и возврат ресурсов</p>
+    </div>
+
+    {% if not buildings %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        Нет доступных зданий для сноса. 
+        <br>Сначала постройте здание на странице <a href="{% url 'island_build' %}" class="alert-link">постройки зданий</a>.
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- Форма сноса -->
+        <div class="col-md-7 mb-4">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-hammer"></i> Демонтаж здания</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="demolishForm" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <!-- Выбор здания -->
+                        <div class="mb-4">
+                            <label for="{{ form.building.id_for_label }}" class="form-label fw-bold">
+                                {{ form.building.label }} <span class="text-danger">*</span>
+                            </label>
+                            <select name="{{ form.building.name }}"
+                                    id="{{ form.building.id_for_label }}"
+                                    class="form-control form-control-lg {% if form.building.errors %}is-invalid{% endif %}"
+                                    {% if not buildings %}disabled{% endif %}
+                                    required>
+                                <option value="">-- Выберите здание для сноса --</option>
+                                {% for building in buildings %}
+                                    <option value="{{ building.id }}" 
+                                            data-owner="{{ building.owner_id }}"
+                                            data-name="{{ building.building_name }}"
+                                            data-type="{{ building.building_type }}"
+                                            data-cost="{{ building.cost }}"
+                                            data-income="{{ building.income_per_minute }}"
+                                            data-last="{{ building.last_profit_collected|date:'U' }}"
+                                            {% if form.building.value|stringformat:"s" == building.id|stringformat:"s" %}selected{% endif %}>
+                                        #{{ building.owner_id }} - {{ building.building_name }} 
+                                        ({{ building.get_building_type_display }}) - {{ building.cost }} ₽
+                                    </option>
+                                {% empty %}
+                                    <option value="" disabled>Нет доступных зданий</option>
+                                {% endfor %}
+                            </select>
+                            {% if form.building.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.building.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Номер игрока (кто сносит) -->
+                        <div class="mb-4">
+                            <label for="{{ form.demolisher_id.id_for_label }}" class="form-label fw-bold">
+                                {{ form.demolisher_id.label }} <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">#</span>
+                                <input type="text" 
+                                       name="{{ form.demolisher_id.name }}"
+                                       id="{{ form.demolisher_id.id_for_label }}"
+                                       class="form-control form-control-lg {% if form.demolisher_id.errors %}is-invalid{% endif %}"
+                                       value="{{ form.demolisher_id.value|default:'' }}"
+                                       placeholder="Введите номер игрока (кто производит снос)"
+                                       {% if not buildings %}disabled{% endif %}
+                                       required>
+                                <button class="btn btn-outline-secondary" type="button" id="checkDemolisherBtn">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                            {% if form.demolisher_id.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.demolisher_id.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text" id="demolisherInfo"></div>
+                        </div>
+
+                        <!-- Информация о здании -->
+                        <div class="card mb-4" id="buildingInfo" style="display: none;">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Информация о здании</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="info-row">
+                                    <span class="info-label">Владелец:</span>
+                                    <span class="info-value" id="infoOwner">—</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Название:</span>
+                                    <span class="info-value" id="infoName">—</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Тип:</span>
+                                    <span class="info-value" id="infoType">—</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Стоимость постройки:</span>
+                                    <span class="info-value" id="infoCost">0 ₽</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Дата постройки:</span>
+                                    <span class="info-value" id="infoDate">—</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Для бизнесов - накопленная прибыль -->
+                        <div class="card mb-4" id="businessProfit" style="display: none;">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0"><i class="bi bi-cash-stack"></i> Накопленная прибыль</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="compensation-box">
+                                    <div class="warning-icon mb-3">💰</div>
+                                    <h4>Прибыль к выдаче</h4>
+                                    <div class="profit-amount" id="accumulatedProfit">0 ₽</div>
+                                    <p class="mt-3 mb-0">
+                                        <small>Эту сумму необходимо передать владельцу при сносе</small>
+                                    </p>
+                                </div>
+                                
+                                <div class="info-row">
+                                    <span class="info-label">Доход в минуту:</span>
+                                    <span class="info-value" id="infoIncome">0 ₽/мин</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Время работы:</span>
+                                    <span class="info-value" id="workTime">0 мин</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="info-label">Последний сбор:</span>
+                                    <span class="info-value" id="infoLast">—</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Предупреждение -->
+                        <div class="warning-box mb-4" id="warningBox">
+                            <i class="bi bi-exclamation-triangle-fill fs-1"></i>
+                            <h4 class="mt-3">Внимание! Операция необратима</h4>
+                            <p>Здание будет полностью удалено. Владелец потеряет все вложения.</p>
+                        </div>
+
+                        <!-- Подтверждение -->
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input confirm-checkbox" type="checkbox" id="confirmCheck">
+                                <label class="form-check-label confirm-label" for="confirmCheck">
+                                    Я подтверждаю, что хочу снести это здание
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'island_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
+                                <i class="bi bi-x-circle"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-danger btn-lg" id="submitBtn" disabled>
+                                <i class="bi bi-building-slash"></i> Снести здание
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информационная панель -->
+        <div class="col-md-5 mb-4">
+            <!-- Статистика сносов -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Статистика сносов</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6 text-center mb-3">
+                            <h3>{{ total_demolitions|default:'0' }}</h3>
+                            <small class="text-muted">Всего сносов</small>
+                        </div>
+                        <div class="col-6 text-center mb-3">
+                            <h3>{{ demolitions_today|default:'0' }}</h3>
+                            <small class="text-muted">За сегодня</small>
+                        </div>
+                        <div class="col-6 text-center">
+                            <h3>{{ total_business_demolitions|default:'0' }}</h3>
+                            <small class="text-muted">Бизнесов снесено</small>
+                        </div>
+                        <div class="col-6 text-center">
+                            <h3>{{ total_compensation|default:'0' }} ₽</h3>
+                            <small class="text-muted">Выплачено компенсаций</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Правила сноса -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Правила сноса</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-3">
+                            <i class="bi bi-1-circle-fill text-primary me-2"></i>
+                            <strong>Здание удаляется навсегда</strong> - операция необратима
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-2-circle-fill text-primary me-2"></i>
+                            <strong>Для бизнесов</strong> - накопленная прибыль выплачивается владельцу
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-3-circle-fill text-primary me-2"></i>
+                            <strong>Для фабрик</strong> - остатки ресурсов теряются
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-4-circle-fill text-primary me-2"></i>
+                            <strong>Стоимость постройки</strong> не возвращается
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Последние сносы -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние сносы</h5>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    {% for demolition in recent_demolitions|slice:":10" %}
+                    <div class="border-bottom mb-2 pb-2">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>{{ demolition.building_name }}</strong>
+                                <br><small class="text-muted">Владелец #{{ demolition.owner_id }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-danger">Снес</span>
+                                <br><small class="text-muted">{{ demolition.timestamp|time:"H:i" }}</small>
+                            </div>
+                        </div>
+                        {% if demolition.accumulated_profit > 0 %}
+                        <div class="mt-1">
+                            <small class="text-success">Выплачено: {{ demolition.accumulated_profit }} ₽</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center mb-0">Нет сносов</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Элементы формы
+    const buildingSelect = document.getElementById('{{ form.building.id_for_label }}');
+    const demolisherInput = document.getElementById('{{ form.demolisher_id.id_for_label }}');
+    const confirmCheck = document.getElementById('confirmCheck');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Информационные элементы
+    const buildingInfo = document.getElementById('buildingInfo');
+    const businessProfit = document.getElementById('businessProfit');
+    const infoOwner = document.getElementById('infoOwner');
+    const infoName = document.getElementById('infoName');
+    const infoType = document.getElementById('infoType');
+    const infoCost = document.getElementById('infoCost');
+    const infoDate = document.getElementById('infoDate');
+    const infoIncome = document.getElementById('infoIncome');
+    const infoLast = document.getElementById('infoLast');
+    const workTime = document.getElementById('workTime');
+    const accumulatedProfit = document.getElementById('accumulatedProfit');
+    const demolisherInfo = document.getElementById('demolisherInfo');
+
+    let currentBuilding = null;
+    let timerInterval = null;
+    let lastTimestamp = null;
+
+    // Функция форматирования времени
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const hours = Math.floor(mins / 60);
+        const remainingMins = mins % 60;
+        
+        if (hours > 0) {
+            return `${hours} ч ${remainingMins} мин`;
+        } else {
+            return `${mins} мин ${Math.floor(seconds % 60)} сек`;
+        }
+    }
+
+    // Функция форматирования даты
+    function formatDateTime(timestamp) {
+        if (!timestamp) return '—';
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString('ru-RU', {
+            hour: '2-digit',
+            minute: '2-digit',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    }
+
+    // Функция обновления таймера для бизнеса
+    function updateTimer() {
+        if (!lastTimestamp || !currentBuilding || currentBuilding.type !== 'business') return;
+        
+        const now = Math.floor(Date.now() / 1000);
+        const diffSeconds = now - lastTimestamp;
+        const diffMinutes = diffSeconds / 60;
+        
+        // Рассчитываем накопленную прибыль
+        const incomePerMinute = currentBuilding.income;
+        const profit = incomePerMinute * diffMinutes;
+        
+        workTime.textContent = formatTime(diffSeconds);
+        accumulatedProfit.textContent = profit.toFixed(2) + ' ₽';
+    }
+
+    // Функция загрузки информации о здании
+    function loadBuildingInfo() {
+        const selected = buildingSelect.options[buildingSelect.selectedIndex];
+        
+        if (selected && selected.value) {
+            const lastTimestamp = parseInt(selected.dataset.last) || Math.floor(Date.now() / 1000) - 3600;
+            
+            currentBuilding = {
+                id: selected.value,
+                owner: selected.dataset.owner,
+                name: selected.dataset.name,
+                type: selected.dataset.type,
+                cost: parseFloat(selected.dataset.cost),
+                income: parseFloat(selected.dataset.income) || 0,
+                last: lastTimestamp
+            };
+            
+            // Базовая информация о здании
+            buildingInfo.style.display = 'block';
+            infoOwner.textContent = '#' + currentBuilding.owner;
+            infoName.textContent = currentBuilding.name;
+            
+            // Тип здания
+            const typeMap = {
+                'business': 'Бизнес',
+                'factory': 'Фабрика',
+                'residential': 'Жилой дом',
+                'other': 'Другое'
+            };
+            infoType.textContent = typeMap[currentBuilding.type] || currentBuilding.type;
+            
+            infoCost.textContent = currentBuilding.cost.toFixed(2) + ' ₽';
+            infoDate.textContent = formatDateTime(currentBuilding.last - 86400); // Пример: день назад
+            
+            // Для бизнеса показываем дополнительную информацию
+            if (currentBuilding.type === 'business') {
+                businessProfit.style.display = 'block';
+                infoIncome.textContent = currentBuilding.income.toFixed(2) + ' ₽/мин';
+                infoLast.textContent = formatDateTime(currentBuilding.last);
+                
+                lastTimestamp = currentBuilding.last;
+                
+                // Запускаем таймер
+                if (timerInterval) clearInterval(timerInterval);
+                updateTimer();
+                timerInterval = setInterval(updateTimer, 1000);
+            } else {
+                businessProfit.style.display = 'none';
+                if (timerInterval) clearInterval(timerInterval);
+            }
+            
+            // Проверяем возможность сноса
+            checkSubmitPossibility();
+        } else {
+            buildingInfo.style.display = 'none';
+            businessProfit.style.display = 'none';
+            if (timerInterval) clearInterval(timerInterval);
+            checkSubmitPossibility();
+        }
+    }
+
+    // Функция проверки исполнителя сноса
+    function checkDemolisher() {
+        const demolisherId = demolisherInput.value.trim();
+        
+        if (demolisherId) {
+            demolisherInfo.innerHTML = `<span class="text-success">✓ Исполнитель #${demolisherId} найден</span>`;
+        } else {
+            demolisherInfo.innerHTML = '';
+        }
+        
+        checkSubmitPossibility();
+    }
+
+    // Функция проверки возможности сноса
+    function checkSubmitPossibility() {
+        const hasBuilding = buildingSelect.value !== '';
+        const hasDemolisher = demolisherInput.value.trim() !== '';
+        const isConfirmed = confirmCheck.checked;
+        
+        submitBtn.disabled = !(hasBuilding && hasDemolisher && isConfirmed);
+    }
+
+    // События
+    buildingSelect.addEventListener('change', loadBuildingInfo);
+    demolisherInput.addEventListener('input', checkDemolisher);
+    demolisherInput.addEventListener('blur', checkDemolisher);
+    confirmCheck.addEventListener('change', checkSubmitPossibility);
+    
+    document.getElementById('checkDemolisherBtn').addEventListener('click', checkDemolisher);
+
+    // Инициализация
+    if (buildingSelect.value) {
+        loadBuildingInfo();
+    }
+    if (demolisherInput.value) {
+        checkDemolisher();
+    }
+});
+</script>
+{% endblock %}

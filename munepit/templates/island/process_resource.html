@@ -1,0 +1,611 @@
+{% extends 'base.html' %}
+
+{% block title %}Обработка ресурса - Остров{% endblock %}
+
+{% block extra_css %}
+<style>
+    .factory-card {
+        transition: all 0.3s;
+        cursor: pointer;
+        border: 2px solid transparent;
+        height: 100%;
+    }
+    .factory-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    .factory-card.selected {
+        border-color: #007bff;
+        background-color: #f0f7ff;
+    }
+    .factory-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+    .processing-animation {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin: 20px 0;
+    }
+    .processing-animation .arrow {
+        font-size: 24px;
+        color: #28a745;
+        animation: moveArrow 1s infinite;
+    }
+    @keyframes moveArrow {
+        0% { transform: translateX(0); opacity: 1; }
+        50% { transform: translateX(10px); opacity: 0.7; }
+        100% { transform: translateX(0); opacity: 1; }
+    }
+    .resource-icon {
+        width: 60px;
+        height: 60px;
+        background: #f8f9fa;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        margin: 0 auto;
+    }
+    .product-icon {
+        width: 60px;
+        height: 60px;
+        background: #28a745;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        margin: 0 auto;
+    }
+    .efficiency-bar {
+        height: 8px;
+        background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    .stats-box {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+    }
+    .stats-number {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #007bff;
+    }
+    .product-badge {
+        background: #28a745;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+    }
+    .resource-badge {
+        background: #dc3545;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-gear"></i> Обработка ресурса</h2>
+            <div>
+              
+                <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Переработка ресурсов на фабриках острова</p>
+    </div>
+
+    {% if not factories %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        Нет доступных фабрик для обработки ресурсов.
+        <br>Сначала постройте фабрику на странице <a href="{% url 'island_build' %}" class="alert-link">постройки зданий</a>.
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- Форма обработки -->
+        <div class="col-md-7 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-gear"></i> Обработка ресурсов</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="processForm" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <!-- Выбор фабрики -->
+                        <div class="mb-4">
+                            <label for="{{ form.factory.id_for_label }}" class="form-label fw-bold">
+                                {{ form.factory.label }} <span class="text-danger">*</span>
+                            </label>
+                            <select name="{{ form.factory.name }}"
+                                    id="{{ form.factory.id_for_label }}"
+                                    class="form-control form-control-lg {% if form.factory.errors %}is-invalid{% endif %}"
+                                    {% if not factories %}disabled{% endif %}
+                                    required>
+                                <option value="">-- Выберите фабрику --</option>
+                                {% for factory in factories %}
+                                    <option value="{{ factory.id }}" 
+                                            data-owner="{{ factory.owner_id }}"
+                                            data-name="{{ factory.building_name }}"
+                                            data-efficiency="100"
+                                            data-resource-type="coffee"
+                                            data-product-type="processed_coffee"
+                                            {% if form.factory.value|stringformat:"s" == factory.id|stringformat:"s" %}selected{% endif %}>
+                                        #{{ factory.owner_id }} - {{ factory.building_name }}
+                                    </option>
+                                {% empty %}
+                                    <option value="" disabled>Нет доступных фабрик</option>
+                                {% endfor %}
+                            </select>
+                            {% if form.factory.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.factory.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Информация о фабрике -->
+                        <div class="card bg-light mb-4" id="factoryInfo" style="display: none;">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Информация о фабрике</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td>Владелец:</td>
+                                                <td><strong id="infoOwner">—</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Название:</td>
+                                                <td><strong id="infoName">—</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Эффективность:</td>
+                                                <td>
+                                                    <span id="infoEfficiency">100</span>%
+                                                    <div class="progress mt-1">
+                                                        <div class="progress-bar bg-success" id="efficiencyBar" style="width: 100%;"></div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    <div class="col-md-6 text-center">
+                                        <div class="processing-animation">
+                                            <div class="resource-icon">🌾</div>
+                                            <div class="arrow">→</div>
+                                            <div class="product-icon">📦</div>
+                                        </div>
+                                        <p class="mb-0">Сырье → Продукт</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Выбор ресурса (если нужно) -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Тип ресурса</label>
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <div class="card resource-card" onclick="selectResource('coffee')">
+                                        <div class="card-body text-center">
+                                            <div class="resource-icon mb-2">☕</div>
+                                            <h6>Кофейные зерна</h6>
+                                            <small class="text-muted">Выход: обжаренный кофе</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="card resource-card" onclick="selectResource('cocoa')">
+                                        <div class="card-body text-center">
+                                            <div class="resource-icon mb-2">🍫</div>
+                                            <h6>Какао бобы</h6>
+                                            <small class="text-muted">Выход: шоколад</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="card resource-card" onclick="selectResource('tobacco')">
+                                        <div class="card-body text-center">
+                                            <div class="resource-icon mb-2">🚬</div>
+                                            <h6>Табак</h6>
+                                            <small class="text-muted">Выход: сигары</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="card resource-card" onclick="selectResource('sugar_cane')">
+                                        <div class="card-body text-center">
+                                            <div class="resource-icon mb-2">🎋</div>
+                                            <h6>Тростник</h6>
+                                            <small class="text-muted">Выход: сахар</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" name="resource_type" id="resourceType" value="">
+                        </div>
+
+                        <!-- Количество ресурса -->
+                        <div class="mb-4">
+                            <label for="{{ form.quantity.id_for_label }}" class="form-label fw-bold">
+                                {{ form.quantity.label }} <span class="text-danger">*</span>
+                            </label>
+                            <input type="number" 
+                                   name="{{ form.quantity.name }}"
+                                   id="{{ form.quantity.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.quantity.errors %}is-invalid{% endif %}"
+                                   value="{{ form.quantity.value|default:'1' }}"
+                                   min="1"
+                                   max="1000"
+                                   step="1"
+                                   {% if not factories %}disabled{% endif %}
+                                   required>
+                            {% if form.quantity.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.quantity.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">Максимум: 1000 единиц за раз</div>
+                        </div>
+
+                        <!-- Расчет стоимости -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0"><i class="bi bi-calculator"></i> Расчет стоимости</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4 text-center">
+                                        <div class="stats-box">
+                                            <div class="stats-number" id="quantity">0</div>
+                                            <div class="text-muted">Количество</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 text-center">
+                                        <div class="stats-box">
+                                            <div class="stats-number" id="pricePerUnit">5</div>
+                                            <div class="text-muted">₽ за ед.</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 text-center">
+                                        <div class="stats-box">
+                                            <div class="stats-number text-success" id="totalCost">0</div>
+                                            <div class="text-muted">Итого ₽</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Выход продукции:</span>
+                                        <strong><span id="outputQuantity">0</span> ед.</strong>
+                                    </div>
+                                    <div class="progress mt-1">
+                                        <div class="progress-bar bg-success" id="outputBar" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Внесено денег -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Внесено денег <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" 
+                                       id="moneyInput"
+                                       class="form-control form-control-lg"
+                                       step="0.01"
+                                       min="0"
+                                       placeholder="0.00"
+                                       required>
+                                <span class="input-group-text">₽</span>
+                            </div>
+                        </div>
+
+                        <!-- Блок сдачи -->
+                        <div class="card bg-success text-white mb-4" id="changeBlock" style="display: none;">
+                            <div class="card-body">
+                                <h5 class="mb-0">Сдача: <span id="changeAmount">0.00</span> ₽</h5>
+                            </div>
+                        </div>
+
+                        <!-- Блок ошибки -->
+                        <div class="alert alert-danger mb-4" id="errorBlock" style="display: none;">
+                            <i class="bi bi-exclamation-triangle"></i> 
+                            Недостаточно средств! Требуется: <span id="requiredAmount">0.00</span> ₽
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'island_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
+                                <i class="bi bi-x-circle"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" {% if not factories %}disabled{% endif %}>
+                                <i class="bi bi-gear"></i> Обработать
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информационная панель -->
+        <div class="col-md-5 mb-4">
+            <!-- Доступные ресурсы -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-box"></i> Доступные ресурсы</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="resource-badge me-2">☕</span>
+                                Кофейные зерна
+                            </div>
+                            <span class="badge bg-primary">1,200</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="resource-badge me-2">🍫</span>
+                                Какао бобы
+                            </div>
+                            <span class="badge bg-primary">850</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="resource-badge me-2">🚬</span>
+                                Табак
+                            </div>
+                            <span class="badge bg-primary">600</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="resource-badge me-2">🎋</span>
+                                Тростник
+                            </div>
+                            <span class="badge bg-primary">2,000</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Коэффициенты переработки -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="bi bi-arrow-repeat"></i> Коэффициенты</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Ресурс</th>
+                                <th>Выход</th>
+                                <th>Цена</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Кофейные зерна</td>
+                                <td>0.8 ед.</td>
+                                <td>5 ₽/ед</td>
+                            </tr>
+                            <tr>
+                                <td>Какао бобы</td>
+                                <td>0.9 ед.</td>
+                                <td>5 ₽/ед</td>
+                            </tr>
+                            <tr>
+                                <td>Табак</td>
+                                <td>0.7 ед.</td>
+                                <td>5 ₽/ед</td>
+                            </tr>
+                            <tr>
+                                <td>Тростник</td>
+                                <td>0.6 ед.</td>
+                                <td>5 ₽/ед</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Последние обработки -->
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние обработки</h5>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    {% for process in recent_processes|slice:":10" %}
+                    <div class="border-bottom mb-2 pb-2">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>Игрок #{{ process.player_id }}</strong>
+                                <br><small class="text-muted">{{ process.resource_type }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-primary">{{ process.quantity }} шт</span>
+                                <br><small class="text-muted">{{ process.timestamp|time:"H:i" }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center mb-0">Нет обработок</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Элементы формы
+    const factorySelect = document.getElementById('{{ form.factory.id_for_label }}');
+    const quantityInput = document.getElementById('{{ form.quantity.id_for_label }}');
+    const moneyInput = document.getElementById('moneyInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const resourceInput = document.getElementById('resourceType');
+    
+    // Информационные элементы
+    const factoryInfo = document.getElementById('factoryInfo');
+    const infoOwner = document.getElementById('infoOwner');
+    const infoName = document.getElementById('infoName');
+    const efficiencyBar = document.getElementById('efficiencyBar');
+    const quantity = document.getElementById('quantity');
+    const pricePerUnit = document.getElementById('pricePerUnit');
+    const totalCost = document.getElementById('totalCost');
+    const outputQuantity = document.getElementById('outputQuantity');
+    const outputBar = document.getElementById('outputBar');
+    const changeBlock = document.getElementById('changeBlock');
+    const changeAmount = document.getElementById('changeAmount');
+    const errorBlock = document.getElementById('errorBlock');
+    const requiredAmount = document.getElementById('requiredAmount');
+
+    // Константы
+    const PROCESSING_COST = 5; // Цена за обработку одной единицы
+    const OUTPUT_RATIOS = {
+        'coffee': 0.8,
+        'cocoa': 0.9,
+        'tobacco': 0.7,
+        'sugar_cane': 0.6
+    };
+
+    let selectedResource = null;
+
+    // Функция выбора ресурса
+    window.selectResource = function(resource) {
+        selectedResource = resource;
+        resourceInput.value = resource;
+        
+        // Подсветка выбранной карточки
+        document.querySelectorAll('.resource-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        event.currentTarget.classList.add('selected');
+        
+        updateCalculation();
+    };
+
+    // Функция загрузки информации о фабрике
+    function loadFactoryInfo() {
+        const selected = factorySelect.options[factorySelect.selectedIndex];
+        
+        if (selected && selected.value) {
+            factoryInfo.style.display = 'block';
+            infoOwner.textContent = '#' + selected.dataset.owner;
+            infoName.textContent = selected.dataset.name;
+            
+            // Рандомная эффективность для демонстрации
+            const efficiency = 85 + Math.floor(Math.random() * 15);
+            document.getElementById('infoEfficiency').textContent = efficiency;
+            efficiencyBar.style.width = efficiency + '%';
+            efficiencyBar.className = efficiency > 90 ? 'progress-bar bg-success' : 
+                                     efficiency > 75 ? 'progress-bar bg-warning' : 
+                                     'progress-bar bg-danger';
+        } else {
+            factoryInfo.style.display = 'none';
+        }
+    }
+
+    // Функция обновления расчета
+    function updateCalculation() {
+        const qty = parseInt(quantityInput.value) || 0;
+        const ratio = selectedResource ? OUTPUT_RATIOS[selectedResource] || 0.8 : 0.8;
+        const output = Math.floor(qty * ratio);
+        
+        quantity.textContent = qty;
+        totalCost.textContent = (qty * PROCESSING_COST).toFixed(2);
+        outputQuantity.textContent = output;
+        
+        const outputPercent = (output / qty) * 100;
+        outputBar.style.width = outputPercent + '%';
+        
+        if (qty > 0) {
+            checkFunds();
+        } else {
+            submitBtn.disabled = true;
+            changeBlock.style.display = 'none';
+            errorBlock.style.display = 'none';
+        }
+    }
+
+    // Функция проверки достаточности средств
+    function checkFunds() {
+        const qty = parseInt(quantityInput.value) || 0;
+        const required = qty * PROCESSING_COST;
+        const money = parseFloat(moneyInput.value) || 0;
+        
+        if (money >= required) {
+            const change = money - required;
+            changeAmount.textContent = change.toFixed(2);
+            changeBlock.style.display = 'block';
+            errorBlock.style.display = 'none';
+            submitBtn.disabled = false;
+        } else {
+            changeBlock.style.display = 'none';
+            errorBlock.style.display = 'block';
+            requiredAmount.textContent = required.toFixed(2);
+            submitBtn.disabled = true;
+        }
+    }
+
+    // События
+    factorySelect.addEventListener('change', loadFactoryInfo);
+    quantityInput.addEventListener('input', updateCalculation);
+    moneyInput.addEventListener('input', checkFunds);
+
+    // Инициализация
+    if (factorySelect.value) {
+        loadFactoryInfo();
+    }
+    updateCalculation();
+
+    // Добавляем стили для выбранной карточки ресурса
+    const style = document.createElement('style');
+    style.textContent = `
+        .resource-card {
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .resource-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .resource-card.selected {
+            border-color: #007bff;
+            background-color: #f0f7ff;
+        }
+    `;
+    document.head.appendChild(style);
+});
+</script>
+{% endblock %}

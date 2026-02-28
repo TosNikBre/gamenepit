@@ -1,0 +1,327 @@
+{% extends 'base.html' %}
+
+{% block title %}Подтверждение постройки - Остров{% endblock %}
+
+{% block extra_css %}
+<style>
+    .success-icon {
+        font-size: 80px;
+        color: #28a745;
+        margin-bottom: 20px;
+        animation: scaleIn 0.5s ease;
+    }
+    @keyframes scaleIn {
+        0% { transform: scale(0); }
+        70% { transform: scale(1.2); }
+        100% { transform: scale(1); }
+    }
+    .building-details {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    }
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 15px;
+        border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+    .detail-label {
+        font-size: 1.1rem;
+        opacity: 0.9;
+    }
+    .detail-value {
+        font-size: 1.3rem;
+        font-weight: bold;
+    }
+    .building-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+    .price-tag {
+        background: rgba(255,255,255,0.2);
+        padding: 10px 20px;
+        border-radius: 50px;
+        display: inline-block;
+        font-size: 1.2rem;
+    }
+    .info-card {
+        transition: all 0.3s;
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        height: 100%;
+    }
+    .info-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    .checkmark {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: #28a745;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 50px;
+        margin: 0 auto 20px;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+        70% { box-shadow: 0 0 0 20px rgba(40, 167, 69, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+    }
+    .owner-badge {
+        background: #17a2b8;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 25px;
+        font-size: 1rem;
+        display: inline-block;
+    }
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin-top: 20px;
+    }
+    .stat-box {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+    }
+    .stat-number {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #28a745;
+    }
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <!-- Успешное подтверждение -->
+            <div class="text-center mb-4">
+                <div class="checkmark">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+                <h1 class="display-4">Здание построено!</h1>
+                <p class="lead text-muted">Строительство успешно завершено</p>
+            </div>
+
+            <!-- Детали постройки -->
+            <div class="building-details text-center">
+                <div class="building-icon">
+                    {% if 'фабрик' in build.building|lower %}
+                        🏭
+                    {% elif 'магазин' in build.building|lower or 'таверн' in build.building|lower or 'ресторан' in build.building|lower or 'гостиниц' in build.building|lower %}
+                        🏪
+                    {% elif 'дом' in build.building|lower or 'особняк' in build.building|lower %}
+                        🏠
+                    {% elif 'склад' in build.building|lower %}
+                        📦
+                    {% elif 'ферм' in build.building|lower or 'плантац' in build.building|lower %}
+                        🌾
+                    {% else %}
+                        🏗️
+                    {% endif %}
+                </div>
+                
+                <h2 class="mb-4">{{ build.building }}</h2>
+                
+                <div class="price-tag mb-4">
+                    <i class="bi bi-coin"></i> Стоимость: {{ build.cost }} ₽
+                </div>
+                
+                <div class="owner-badge mb-4">
+                    <i class="bi bi-person"></i> Владелец: Игрок #{{ build.player_id }}
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Дата постройки:</span>
+                    <span class="detail-value">{% now "d.m.Y H:i" %}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Построил:</span>
+                    <span class="detail-value">{{ request.session.username|default:'Модератор' }}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Номер записи:</span>
+                    <span class="detail-value">#{{ build.id|default:'Новый' }}</span>
+                </div>
+            </div>
+
+            <!-- Статистика игрока -->
+            <div class="stats-grid mb-4">
+                <div class="stat-box">
+                    <div class="stat-number">{{ player_buildings|default:'0' }}</div>
+                    <div class="stat-label">Всего построек</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">{{ player_businesses|default:'0' }}</div>
+                    <div class="stat-label">Бизнесов</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">{{ player_factories|default:'0' }}</div>
+                    <div class="stat-label">Фабрик</div>
+                </div>
+            </div>
+
+            <!-- Дополнительная информация -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="card info-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="bi bi-lightbulb text-warning"></i>
+                                Что дальше?
+                            </h5>
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    Здание готово к использованию
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    Можно начать производство
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    Прибыль будет накапливаться
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <div class="card info-card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="bi bi-graph-up text-primary"></i>
+                                Характеристики
+                            </h5>
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="bi bi-arrow-up text-success"></i>
+                                    Доход: {% if 'фабрик' in build.building|lower %}50/ход{% elif 'бизнес' in build.building|lower %}5 ₽/мин{% else %}—{% endif %}
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-people text-info"></i>
+                                    Рабочих: {% if 'фабрик' in build.building|lower %}10{% elif 'бизнес' in build.building|lower %}3{% else %}0{% endif %}
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-box text-secondary"></i>
+                                    Вместимость: {% if 'склад' in build.building|lower %}500{% else %}100{% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кнопки действий -->
+            <div class="row mt-4">
+                <div class="col-md-4 mb-2">
+                    <a href="{% url 'island_build' %}" class="btn btn-success btn-lg w-100">
+                        <i class="bi bi-plus-circle"></i> Построить еще
+                    </a>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <a href="{% url 'island_dashboard' %}" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-tree"></i> На Остров
+                    </a>
+                </div>
+                <div class="col-md-4 mb-2">
+                    
+                </div>
+            </div>
+
+            <!-- Информация о записи в лог -->
+            <div class="card mt-4 bg-light">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-info-circle-fill text-info fs-3 me-3"></i>
+                        <div>
+                            <h6 class="mb-1">Запись добавлена в лог операций</h6>
+                            <p class="text-muted mb-0">
+                                Время: {% now "d.m.Y H:i:s" %} | 
+                                Автор: {{ request.session.username }} | 
+                                Тип: Постройка здания
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Автоматический редирект (опционально) -->
+{% if auto_redirect %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Анимация появления
+    const elements = document.querySelectorAll('.building-details, .stats-grid, .info-card, .btn');
+    elements.forEach((el, index) => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            el.style.transition = 'all 0.5s ease';
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0)';
+        }, 100 * index);
+    });
+    
+    // Автоматический редирект через 10 секунд
+    let secondsLeft = 10;
+    const timerElement = document.createElement('div');
+    timerElement.className = 'text-center mt-3 text-muted';
+    timerElement.innerHTML = `Автоматический переход через <span id="timer">${secondsLeft}</span> секунд...`;
+    
+    const container = document.querySelector('.row.justify-content-center .col-md-8');
+    container.appendChild(timerElement);
+    
+    const timer = setInterval(() => {
+        secondsLeft--;
+        const timerSpan = document.getElementById('timer');
+        if (timerSpan) {
+            timerSpan.textContent = secondsLeft;
+        }
+        
+        if (secondsLeft <= 0) {
+            clearInterval(timer);
+            window.location.href = "{% url 'island_dashboard' %}";
+        }
+    }, 1000);
+    
+    // Отмена автоматического редиректа при взаимодействии
+    document.addEventListener('click', function() {
+        clearInterval(timer);
+        if (timerElement) {
+            timerElement.style.display = 'none';
+        }
+    }, { once: true });
+});
+</script>
+{% endif %}
+{% endblock %}

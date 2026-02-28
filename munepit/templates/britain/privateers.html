@@ -1,0 +1,324 @@
+{% extends 'base.html' %}
+
+{% block title %}Каперы - Великобритания{% endblock %}
+
+{% block extra_css %}
+<style>
+    .privateer-row {
+        transition: all 0.3s;
+    }
+    .privateer-row:hover {
+        background-color: #f8f9fa;
+        transform: translateX(5px);
+    }
+    .complaint-badge {
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .complaint-badge:hover {
+        transform: scale(1.1);
+    }
+    .overdue-privateer {
+        border-left: 4px solid #dc3545;
+        background-color: #fff5f5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-person-badge"></i> Управление каперами</h2>
+            <div>
+                <span class="badge bg-primary badge-custom me-2">
+                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
+                </span>
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Управление лицензиями и каперами</p>
+    </div>
+
+    <!-- Статистика -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6>Всего каперов</h6>
+                    <h3>{{ total_privateers }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6>Активных</h6>
+                    <h3>{{ active_privateers_count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6>С жалобами</h6>
+                    <h3>{{ privateers_with_complaints }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6>Общая выслуга</h6>
+                    <h3>{{ total_tenure }} дн</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Кнопки действий -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <a href="{% url 'britain_privateer_license' %}" class="btn btn-primary w-100">
+                                <i class="bi bi-plus-circle"></i> Выдать лицензию
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'britain_privateer_change_ship' %}" class="btn btn-info w-100">
+                                <i class="bi bi-ship"></i> Сменить корабль
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'britain_privateer_complaint' %}" class="btn btn-warning w-100">
+                                <i class="bi bi-exclamation-triangle"></i> Подать жалобу
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'britain_privateer_payment' %}" class="btn btn-success w-100">
+                                <i class="bi bi-cash"></i> Внести платеж
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Таблица каперов -->
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0"><i class="bi bi-table"></i> Список каперов</h5>
+        </div>
+        <div class="card-body">
+            <!-- Фильтры -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <input type="text" id="searchInput" class="form-control" placeholder="Поиск по номеру игрока...">
+                </div>
+                <div class="col-md-3">
+                    <select id="shipFilter" class="form-control">
+                        <option value="">Все корабли</option>
+                        <option value="frigate">Фрегат</option>
+                        <option value="battleship">Линкор</option>
+                        <option value="steam_frigate">Паровой фрегат</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select id="statusFilter" class="form-control">
+                        <option value="">Все статусы</option>
+                        <option value="active">Активные</option>
+                        <option value="inactive">Неактивные</option>
+                        <option value="complaints">С жалобами</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-secondary w-100" onclick="resetFilters()">
+                        <i class="bi bi-eraser"></i> Сброс
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover table-custom" id="privateersTable">
+                    <thead>
+                        <tr>
+                            <th>Игрок</th>
+                            <th>Корабль</th>
+                            <th>Выслуга</th>
+                            <th>Жалобы</th>
+                            <th>Последний платеж</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for privateer in privateers %}
+                        <tr class="privateer-row {% if privateer.is_overdue %}overdue-privateer{% endif %}"
+                            data-player="{{ privateer.player_id }}"
+                            data-ship="{{ privateer.ship_type }}"
+                            data-status="{% if privateer.is_active %}active{% else %}inactive{% endif %}"
+                            data-complaints="{{ privateer.complaints }}">
+                            <td>
+                                <strong>#{{ privateer.player_id }}</strong>
+                                <br><small class="text-muted">Лицензия: {{ privateer.licensed_at|date:"d.m.Y" }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">
+                                    {{ privateer.get_ship_type_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% with tenure=privateer.tenure %}
+                                    {{ tenure.days }}д {{ tenure.hours }}ч
+                                {% endwith %}
+                            </td>
+                            <td>
+                                <span class="badge {% if privateer.complaints > 0 %}bg-danger{% else %}bg-success{% endif %} complaint-badge"
+                                      onclick="showComplaintHistory('{{ privateer.id }}')">
+                                    {{ privateer.complaints }}
+                                </span>
+                            </td>
+                            <td>
+                                {{ privateer.last_payment_at|date:"d.m.Y H:i" }}
+                                {% if privateer.is_overdue %}
+                                    <span class="badge bg-danger">Просрочка</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if privateer.is_active %}
+                                    <span class="badge bg-success">Активен</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Неактивен</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{% url 'britain_privateer_change_ship' %}?privateer={{ privateer.id }}" 
+                                       class="btn btn-sm btn-info" title="Сменить корабль">
+                                        <i class="bi bi-ship"></i>
+                                    </a>
+                                    <a href="{% url 'britain_privateer_complaint' %}?privateer={{ privateer.id }}" 
+                                       class="btn btn-sm btn-warning" title="Подать жалобу">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                    </a>
+                                    <a href="{% url 'britain_privateer_payment' %}?privateer={{ privateer.id }}" 
+                                       class="btn btn-sm btn-success" title="Внести платеж">
+                                        <i class="bi bi-cash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                Нет каперов
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно истории жалоб -->
+<div class="modal fade" id="complaintModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">История жалоб</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="complaintHistory">
+                Загрузка...
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Фильтрация таблицы
+document.getElementById('searchInput').addEventListener('keyup', filterTable);
+document.getElementById('shipFilter').addEventListener('change', filterTable);
+document.getElementById('statusFilter').addEventListener('change', filterTable);
+
+function filterTable() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const shipFilter = document.getElementById('shipFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    const rows = document.querySelectorAll('#privateersTable tbody tr');
+    
+    rows.forEach(row => {
+        const player = row.dataset.player.toLowerCase();
+        const ship = row.dataset.ship;
+        const status = row.dataset.status;
+        const complaints = parseInt(row.dataset.complaints);
+        
+        let show = true;
+        
+        if (searchTerm && !player.includes(searchTerm)) {
+            show = false;
+        }
+        
+        if (shipFilter && ship !== shipFilter) {
+            show = false;
+        }
+        
+        if (statusFilter === 'active' && status !== 'active') {
+            show = false;
+        } else if (statusFilter === 'inactive' && status !== 'inactive') {
+            show = false;
+        } else if (statusFilter === 'complaints' && complaints === 0) {
+            show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function resetFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('shipFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    filterTable();
+}
+
+function showComplaintHistory(privateerId) {
+    document.getElementById('complaintHistory').innerHTML = 'Загрузка...';
+    $('#complaintModal').modal('show');
+    
+    // Здесь должен быть AJAX запрос
+    setTimeout(() => {
+        document.getElementById('complaintHistory').innerHTML = `
+            <div class="list-group">
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <span>Жалоба #1</span>
+                        <small class="text-muted">10.03.2024</small>
+                    </div>
+                    <p class="mb-0">Нарушение торговых правил</p>
+                </div>
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <span>Жалоба #2</span>
+                        <small class="text-muted">05.03.2024</small>
+                    </div>
+                    <p class="mb-0">Агрессивное поведение</p>
+                </div>
+            </div>
+        `;
+    }, 500);
+}
+</script>
+{% endblock %}

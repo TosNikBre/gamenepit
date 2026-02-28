@@ -1,0 +1,409 @@
+<!-- templates/britain/sale.html -->
+{% extends 'base.html' %}
+
+{% block title %}Продажа товара - Великобритания{% endblock %}
+
+{% block extra_css %}
+<style>
+    .price-indicator {
+        transition: all 0.3s ease;
+    }
+    .price-up {
+        color: #28a745;
+        animation: pulse 1s;
+    }
+    .price-down {
+        color: #dc3545;
+        animation: pulse 1s;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+    .timer-bar {
+        height: 4px;
+        background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+        transition: width 1s linear;
+    }
+    /* Стили для выпадающего списка */
+    select.form-control-lg {
+        font-size: 1.1rem;
+        padding: 0.75rem 1rem;
+    }
+    select.form-control-lg option {
+        padding: 10px;
+        font-size: 1rem;
+    }
+    select.form-control-lg option:checked {
+        background: linear-gradient(45deg, #4776E6, #8E54E9);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-tag"></i> Продажа товара</h2>
+            <div>
+                <span class="badge bg-primary badge-custom me-2">
+                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
+                </span>
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Великобритания - Торговая палата</p>
+    </div>
+
+    <div class="row">
+        <!-- Форма продажи -->
+        <div class="col-md-7 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-cart"></i> Оформление продажи</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="saleForm" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <!-- Выбор товара -->
+                        <div class="mb-4">
+                            <label for="{{ form.good.id_for_label }}" class="form-label fw-bold">
+                                {{ form.good.label }} <span class="text-danger">*</span>
+                            </label>
+                            <select name="{{ form.good.name }}"
+                                    id="{{ form.good.id_for_label }}"
+                                    class="form-control form-control-lg {% if form.good.errors %}is-invalid{% endif %}"
+                                    required>
+                                <option value="">-- Выберите товар --</option>
+                                {% for value, label in form.fields.good.choices %}
+                                    <option value="{{ value }}" 
+                                            {% if form.good.value == value %}selected{% endif %}
+                                            data-price="
+                                                {% if value == 'textile' %}20
+                                                {% elif value == 'rum' %}15
+                                                {% elif value == 'tools' %}25
+                                                {% elif value == 'weapons' %}30
+                                                {% else %}0{% endif %}">
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if form.good.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.good.errors.0 }}
+                                </div>
+                            {% endif %}
+                            
+                            <!-- Отладка: показываем количество вариантов -->
+                            <div class="form-text text-muted small">
+                                Доступно товаров: {{ form.fields.good.choices|length }}
+                            </div>
+                        </div>
+
+                        <!-- Номер игрока -->
+                        <div class="mb-4">
+                            <label for="{{ form.player_id.id_for_label }}" class="form-label fw-bold">
+                                {{ form.player_id.label }} <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   name="{{ form.player_id.name }}"
+                                   id="{{ form.player_id.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.player_id.errors %}is-invalid{% endif %}"
+                                   value="{{ form.player_id.value|default:'' }}"
+                                   placeholder="Введите номер игрока"
+                                   required>
+                            {% if form.player_id.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.player_id.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">Номер игрока-покупателя</div>
+                        </div>
+
+                        <!-- Количество -->
+                        <div class="mb-4">
+                            <label for="{{ form.quantity.id_for_label }}" class="form-label fw-bold">
+                                {{ form.quantity.label }} <span class="text-danger">*</span>
+                            </label>
+                            <input type="number" 
+                                   name="{{ form.quantity.name }}"
+                                   id="{{ form.quantity.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.quantity.errors %}is-invalid{% endif %}"
+                                   value="{{ form.quantity.value|default:'1' }}"
+                                   min="1"
+                                   step="1"
+                                   required>
+                            {% if form.quantity.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.quantity.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Блок с динамической ценой -->
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h6 class="mb-2">Текущая цена:</h6>
+                                        <div class="d-flex align-items-center">
+                                            <span class="display-6 me-3" id="currentPrice">0</span>
+                                            <span class="badge bg-secondary" id="priceUnit">₽/шт</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="mb-2">Итого к оплате:</h6>
+                                        <div class="d-flex align-items-center">
+                                            <span class="display-6 text-primary me-3" id="totalPrice">0</span>
+                                            <span class="badge bg-primary" id="totalUnit">₽</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Внесено денег -->
+                        <div class="mb-4">
+                            <label for="{{ form.money_input.id_for_label }}" class="form-label fw-bold">
+                                {{ form.money_input.label }} <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" 
+                                       name="{{ form.money_input.name }}"
+                                       id="{{ form.money_input.id_for_label }}"
+                                       class="form-control form-control-lg {% if form.money_input.errors %}is-invalid{% endif %}"
+                                       value="{{ form.money_input.value|default:'' }}"
+                                       step="0.01"
+                                       min="0"
+                                       placeholder="0.00"
+                                       required>
+                                <span class="input-group-text">₽</span>
+                                {% if form.money_input.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.money_input.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Блок сдачи -->
+                        <div class="card bg-success text-white mb-4" id="changeBlock" style="display: none;">
+                            <div class="card-body">
+                                <h5 class="mb-0">Сдача: <span id="changeAmount">0.00</span> ₽</h5>
+                            </div>
+                        </div>
+
+                        <!-- Блок ошибки -->
+                        <div class="alert alert-danger mb-4" id="errorBlock" style="display: none;">
+                            <i class="bi bi-exclamation-triangle"></i> 
+                            Недостаточно средств! Требуется: <span id="requiredAmount">0.00</span> ₽
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'britain_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
+                                <i class="bi bi-x-circle"></i> Отмена
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                                <i class="bi bi-check-circle"></i> Подтвердить продажу
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информационная панель -->
+        <div class="col-md-5 mb-4">
+            <!-- Текущие цены -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Текущие цены</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Товар</th>
+                                    <th>Базовая цена</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Ткань</td>
+                                    <td><span class="badge bg-primary">20 ₽</span></td>
+                                    <td><span class="badge bg-success">В наличии</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Ром</td>
+                                    <td><span class="badge bg-primary">15 ₽</span></td>
+                                    <td><span class="badge bg-success">В наличии</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Инструменты</td>
+                                    <td><span class="badge bg-primary">25 ₽</span></td>
+                                    <td><span class="badge bg-success">В наличии</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Оружие</td>
+                                    <td><span class="badge bg-primary">30 ₽</span></td>
+                                    <td><span class="badge bg-success">В наличии</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Правила торговли -->
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Правила торговли</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            Стартовая цена: 20-30 ₽
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            За каждые 5 единиц цена падает на 1 ₽
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            Цена восстанавливается каждые 5 минут
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Страница загружена');
+    
+    // Элементы формы
+    const goodSelect = document.getElementById('{{ form.good.id_for_label }}');
+    const quantityInput = document.getElementById('{{ form.quantity.id_for_label }}');
+    const moneyInput = document.getElementById('{{ form.money_input.id_for_label }}');
+    const submitBtn = document.getElementById('submitBtn');
+    const currentPriceSpan = document.getElementById('currentPrice');
+    const totalPriceSpan = document.getElementById('totalPrice');
+    const changeBlock = document.getElementById('changeBlock');
+    const changeAmount = document.getElementById('changeAmount');
+    const errorBlock = document.getElementById('errorBlock');
+    const requiredAmount = document.getElementById('requiredAmount');
+    
+    // Проверяем, есть ли элементы
+    console.log('Select элемент:', goodSelect);
+    if (goodSelect) {
+        console.log('Количество опций:', goodSelect.options.length);
+        for (let i = 0; i < goodSelect.options.length; i++) {
+            console.log(`Опция ${i}:`, goodSelect.options[i].text, goodSelect.options[i].value);
+        }
+    }
+    
+    // Цены по умолчанию
+    const basePrices = {
+        'textile': 20,
+        'rum': 15,
+        'tools': 25,
+        'weapons': 30
+    };
+    
+    let currentPrices = {...basePrices};
+    
+    // Функция расчета цены с учетом количества
+    function calculatePrice(basePrice, quantity) {
+        // За каждые 5 единиц цена падает на 1
+        const priceDrop = Math.floor(quantity / 5);
+        return Math.max(basePrice - priceDrop, 1); // Минимум 1
+    }
+    
+    // Обновление итоговой суммы
+    function updateTotal() {
+        const good = goodSelect.value;
+        const quantity = parseInt(quantityInput.value) || 0;
+        
+        console.log('Выбран товар:', good, 'Количество:', quantity);
+        
+        if (good && quantity > 0) {
+            const basePrice = currentPrices[good] || basePrices[good] || 0;
+            const finalPrice = calculatePrice(basePrice, quantity);
+            const total = finalPrice * quantity;
+            
+            currentPriceSpan.textContent = finalPrice;
+            totalPriceSpan.textContent = total.toFixed(2);
+            
+            // Проверка достаточности средств
+            const money = parseFloat(moneyInput.value) || 0;
+            
+            if (money >= total) {
+                const change = money - total;
+                changeAmount.textContent = change.toFixed(2);
+                changeBlock.style.display = 'block';
+                errorBlock.style.display = 'none';
+                submitBtn.disabled = false;
+                console.log('Достаточно средств, сдача:', change);
+            } else {
+                changeBlock.style.display = 'none';
+                errorBlock.style.display = 'block';
+                requiredAmount.textContent = total.toFixed(2);
+                submitBtn.disabled = true;
+                console.log('Недостаточно средств, требуется:', total);
+            }
+        } else {
+            currentPriceSpan.textContent = '0';
+            totalPriceSpan.textContent = '0';
+            submitBtn.disabled = true;
+            changeBlock.style.display = 'none';
+            errorBlock.style.display = 'none';
+            console.log('Не выбраны товар или количество');
+        }
+    }
+    
+    // События
+    if (goodSelect) {
+        goodSelect.addEventListener('change', function() {
+            console.log('Изменился выбор товара:', this.value);
+            updateTotal();
+        });
+    }
+    
+    if (quantityInput) {
+        quantityInput.addEventListener('input', function() {
+            console.log('Изменилось количество:', this.value);
+            updateTotal();
+        });
+    }
+    
+    if (moneyInput) {
+        moneyInput.addEventListener('input', function() {
+            console.log('Изменилась сумма:', this.value);
+            updateTotal();
+        });
+    }
+    
+    // Инициализация
+    updateTotal();
+});
+</script>
+{% endblock %}

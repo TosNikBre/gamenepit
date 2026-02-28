@@ -1,0 +1,329 @@
+{% extends 'base.html' %}
+
+{% block title %}Кредиты - Великобритания{% endblock %}
+
+{% block extra_css %}
+<style>
+    .overdue-row {
+        background-color: #ffebee !important;
+        border-left: 4px solid #dc3545;
+    }
+    .overdue-row td {
+        color: #c62828;
+    }
+    .payment-progress {
+        height: 6px;
+        border-radius: 3px;
+    }
+    .timer-danger {
+        color: #dc3545;
+        font-weight: bold;
+        animation: blink 1s infinite;
+    }
+    @keyframes blink {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-credit-card"></i> Управление кредитами</h2>
+            <div>
+                <span class="badge bg-primary badge-custom me-2">
+                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
+                </span>
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Банковская система Великобритании</p>
+    </div>
+
+    <!-- Статистика кредитов -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6>Активных кредитов</h6>
+                    <h3>{{ active_credits_count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6>Общая сумма</h6>
+                    <h3>{{ total_credit_amount }} ₽</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6>Просрочено</h6>
+                    <h3>{{ overdue_credits_count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6>Выплачено</h6>
+                    <h3>{{ total_paid }} ₽</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Кнопки действий -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <a href="{% url 'britain_credit_issue' %}" class="btn btn-success w-100">
+                                <i class="bi bi-plus-circle"></i> Выдать кредит
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{% url 'britain_credit_payment' %}" class="btn btn-primary w-100">
+                                <i class="bi bi-cash"></i> Внести платеж
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Таблица кредитов -->
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0"><i class="bi bi-table"></i> Активные кредиты</h5>
+        </div>
+        <div class="card-body">
+            <!-- Фильтры -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <input type="text" id="searchInput" class="form-control" placeholder="Поиск по номеру игрока...">
+                </div>
+                <div class="col-md-3">
+                    <select id="statusFilter" class="form-control">
+                        <option value="">Все кредиты</option>
+                        <option value="normal">В норме</option>
+                        <option value="overdue">Просроченные</option>
+                        <option value="critical">Критические (>15 мин)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select id="sortFilter" class="form-control">
+                        <option value="time">По времени</option>
+                        <option value="amount">По сумме</option>
+                        <option value="remaining">По остатку</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-secondary w-100" onclick="resetFilters()">
+                        <i class="bi bi-eraser"></i> Сброс
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover table-custom" id="creditsTable">
+                    <thead>
+                        <tr>
+                            <th>Игрок</th>
+                            <th>Сумма кредита</th>
+                            <th>Ежемесячный платеж</th>
+                            <th>Осталось платежей</th>
+                            <th>Прогресс</th>
+                            <th>Последний платеж</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for credit in credits %}
+                        <tr class="{% if credit.is_overdue %}overdue-row{% endif %}"
+                            data-player="{{ credit.player_id }}"
+                            data-status="{% if credit.is_overdue %}overdue{% else %}normal{% endif %}"
+                            data-time="{{ credit.last_payment_at|date:'U' }}">
+                            <td>
+                                <strong>#{{ credit.player_id }}</strong>
+                                <br><small class="text-muted">Выдан: {{ credit.issued_at|date:"d.m.Y" }}</small>
+                            </td>
+                            <td>
+                                <strong>{{ credit.credit_amount }} ₽</strong>
+                            </td>
+                            <td>
+                                {{ credit.monthly_payment }} ₽
+                            </td>
+                            <td>
+                                <span class="badge {% if credit.remaining_payments < 3 %}bg-warning{% else %}bg-info{% endif %}">
+                                    {{ credit.remaining_payments }}/{{ credit.term_months }}
+                                </span>
+                            </td>
+                            <td style="width: 150px;">
+                                {% with progress=credit.term_months|add:credit.remaining_payments %}
+                                <div class="progress payment-progress">
+                                    <div class="progress-bar bg-success" 
+                                         style="width: {% widthratio credit.term_months|add:credit.remaining_payments credit.term_months 100 %}">
+                                    </div>
+                                </div>
+                                {% endwith %}
+                            </td>
+                            <td>
+                                <span class="last-payment-time" data-timestamp="{{ credit.last_payment_at|date:'U' }}">
+                                    {{ credit.last_payment_at|date:"d.m.Y H:i" }}
+                                </span>
+                                {% if credit.is_overdue %}
+                                    <span class="timer-danger">⚠️</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if credit.is_overdue %}
+                                    <span class="badge bg-danger">Просрочка</span>
+                                {% else %}
+                                    <span class="badge bg-success">Активен</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{% url 'britain_credit_payment' %}?debtor={{ credit.id }}" 
+                                       class="btn btn-sm btn-success" title="Внести платеж">
+                                        <i class="bi bi-cash"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-info" onclick="showCreditDetails('{{ credit.id }}')"
+                                            title="Детали">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                Нет активных кредитов
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно деталей кредита -->
+<div class="modal fade" id="creditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">Детали кредита</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="creditDetails">
+                Загрузка...
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Обновление таймеров
+function updateTimers() {
+    const now = Math.floor(Date.now() / 1000);
+    const paymentTimes = document.querySelectorAll('.last-payment-time');
+    
+    paymentTimes.forEach(el => {
+        const timestamp = parseInt(el.dataset.timestamp);
+        const diff = now - timestamp;
+        
+        if (diff > 600) { // 10 минут
+            el.closest('tr').classList.add('overdue-row');
+            const minutes = Math.floor(diff / 60);
+            el.innerHTML = el.innerHTML.split('<')[0] + ` <span class="timer-danger">(${minutes} мин просрочки)</span>`;
+        }
+    });
+}
+
+// Фильтрация
+document.getElementById('searchInput').addEventListener('keyup', filterTable);
+document.getElementById('statusFilter').addEventListener('change', filterTable);
+
+function filterTable() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    const rows = document.querySelectorAll('#creditsTable tbody tr');
+    
+    rows.forEach(row => {
+        const player = row.dataset.player.toLowerCase();
+        const status = row.dataset.status;
+        
+        let show = true;
+        
+        if (searchTerm && !player.includes(searchTerm)) {
+            show = false;
+        }
+        
+        if (statusFilter === 'overdue' && status !== 'overdue') {
+            show = false;
+        } else if (statusFilter === 'normal' && status !== 'normal') {
+            show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function resetFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('statusFilter').value = '';
+    filterTable();
+}
+
+function showCreditDetails(creditId) {
+    document.getElementById('creditDetails').innerHTML = 'Загрузка...';
+    $('#creditModal').modal('show');
+    
+    // Здесь должен быть AJAX запрос
+    setTimeout(() => {
+        document.getElementById('creditDetails').innerHTML = `
+            <div class="list-group">
+                <div class="list-group-item">
+                    <strong>График платежей:</strong>
+                </div>
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <span>Платеж #1</span>
+                        <span class="text-success">Оплачен</span>
+                    </div>
+                </div>
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <span>Платеж #2</span>
+                        <span class="text-warning">Ожидается</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }, 500);
+}
+
+// Обновление каждые 10 секунд
+setInterval(updateTimers, 10000);
+updateTimers();
+</script>
+{% endblock %}

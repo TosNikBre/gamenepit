@@ -1,0 +1,25 @@
+
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title mb-0">Выберите тип сделки</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-3">
+                    <a href="{% url 'enter_player_id' 'building' %}" class="btn btn-warning btn-lg">
+                        🏢 Покупка здания
+                    </a>
+                    <a href="{% url 'enter_player_id' 'resource' %}" class="btn btn-success btn-lg">
+                        🥕 Покупка ресурса
+                    </a>
+                </div>
+                <hr>
+                <a href="{% url 'index' %}" class="btn btn-secondary">Назад</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

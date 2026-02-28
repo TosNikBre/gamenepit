@@ -1,0 +1,32 @@
+
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title mb-0">Добро пожаловать в систему статистики сделок</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-3">
+                    <!-- Вариант А: На страницу логина -->
+<a href="{% url 'login' %}" class="btn btn-success btn-lg">
+    Новая сделка
+</a>
+
+<!-- Вариант Б: На дашборд Острова (если есть) -->
+<a href="{% url 'island_dashboard' %}" class="btn btn-success btn-lg">
+    Новая сделка (Остров)
+</a>
+
+<!-- Вариант В: На дашборд Британии (если есть) -->
+<a href="{% url 'britain_dashboard' %}" class="btn btn-success btn-lg">
+    Новая сделка (Великобритания)
+</a>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

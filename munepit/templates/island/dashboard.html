@@ -1,0 +1,181 @@
+<!-- templates/island/dashboard.html -->
+{% extends 'base.html' %}
+
+{% block title %}Остров - Главная{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-tree"></i> Стол "Остров"</h2>
+            <div>
+              
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-primary me-2">
+                    <i class="bi bi-building"></i> Перейти в Великобританию
+                </a>
+              
+            </div>
+        </div>
+        <p class="text-muted">Управление ресурсами, зданиями и правосудием</p>
+    </div>
+
+    <!-- Статистика -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Каторжники</h5>
+                    <h2>{{ convicts_count|default:'0' }}</h2>
+                    <small>находятся на каторге</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Здания</h5>
+                    <h2>{{ buildings_count|default:'0' }}</h2>
+                    <small>построено</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Сделки сегодня</h5>
+                    <h2>{{ today_deals|default:'0' }}</h2>
+                    <small>за сегодня</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Меню действий -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Сделки и суд</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'island_deal' %}" class="btn btn-outline-primary btn-lg">
+                            <i class="bi bi-handshake"></i> Сделка между игроками
+                        </a>
+                        <a href="{% url 'island_court' %}" class="btn btn-outline-danger btn-lg">
+                            <i class="bi bi-gavel"></i> Суд
+                        </a>
+                        <a href="{% url 'island_release' %}" class="btn btn-outline-warning btn-lg">
+                            <i class="bi bi-unlock"></i> Выход с каторги
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Ресурсы и производство</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'island_purchase_resource' %}" class="btn btn-outline-success btn-lg">
+                            <i class="bi bi-basket"></i> Покупка ресурса
+                        </a>
+                        <a href="{% url 'island_build' %}" class="btn btn-outline-success btn-lg">
+                            <i class="bi bi-building"></i> Постройка здания
+                        </a>
+                        <a href="{% url 'island_process_resource' %}" class="btn btn-outline-success btn-lg">
+                            <i class="bi bi-gear"></i> Обработка ресурса
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Бизнес</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'island_profit' %}" class="btn btn-outline-info btn-lg">
+                            <i class="bi bi-cash-stack"></i> Получение прибыли
+                        </a>
+                        <a href="{% url 'island_demolish' %}" class="btn btn-outline-danger btn-lg">
+                            <i class="bi bi-building-slash"></i> Снос здания
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Навигация</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'britain_dashboard' %}" class="btn btn-outline-primary btn-lg">
+                            <i class="bi bi-building"></i> Перейти в Великобританию
+                        </a>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список каторжников -->
+    <div class="card mt-4">
+        <div class="card-header bg-warning">
+            <h5 class="mb-0"><i class="bi bi-person-down"></i> Текущие каторжники</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-custom">
+                    <thead>
+                        <tr>
+                            <th>Игрок</th>
+                            <th>Преступление</th>
+                            <th>Штраф</th>
+                            <th>Срок</th>
+                            <th>Конфискация</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for convict in convicts %}
+                        <tr>
+                            <td><strong>{{ convict.player_id }}</strong><br><small>{{ convict.player_name }}</small></td>
+                            <td>{{ convict.crime_description|truncatechars:50 }}</td>
+                            <td>{{ convict.fine_amount }} ₽</td>
+                            <td>{{ convict.sentence_years }} лет</td>
+                            <td>
+                                {% if convict.confiscation %}
+                                    <span class="badge bg-danger">Да</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Нет</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'island_release' %}?player={{ convict.id }}" class="btn btn-sm btn-success">
+                                    <i class="bi bi-unlock"></i> Освободить
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Нет каторжников</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

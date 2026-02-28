@@ -1,0 +1,89 @@
+<!-- templates/island/profit_debug.html -->
+{% extends 'base.html' %}
+
+{% block title %}Получение прибыли - Отладка{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h2><i class="bi bi-cash-stack"></i> Получение прибыли (Отладка)</h2>
+        <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-secondary">Назад</a>
+    </div>
+
+    <!-- Информация о бизнесах в базе -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5>Бизнесы в базе данных</h5>
+        </div>
+        <div class="card-body">
+            <p>Всего бизнесов: <strong>{{ total_businesses }}</strong></p>
+            
+            {% if businesses %}
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Название</th>
+                            <th>Владелец</th>
+                            <th>Доход/мин</th>
+                            <th>Последний сбор</th>
+                            <th>Накоплено</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for business in businesses %}
+                        <tr>
+                            <td>{{ business.id }}</td>
+                            <td>{{ business.building_name }}</td>
+                            <td>#{{ business.owner_id }}</td>
+                            <td>{{ business.income_per_minute }} ₽</td>
+                            <td>{{ business.last_profit_collected|date:"d.m.Y H:i" }}</td>
+                            <td>{{ business.calculate_accumulated_profit|floatformat:2 }} ₽</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-danger">
+                                Нет бизнесов в базе данных!
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Бизнесы не найдены в базе данных!
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Форма получения прибыли -->
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h5>Форма получения прибыли</h5>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label class="form-label">Выберите бизнес:</label>
+                    <select name="business" class="form-control" required>
+                        <option value="">-- Выберите бизнес --</option>
+                        {% for business in businesses %}
+                            <option value="{{ business.id }}">
+                                #{{ business.owner_id }} - {{ business.building_name }} 
+                                ({{ business.income_per_minute }} ₽/мин)
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-success">Получить прибыль</button>
+                <a href="{% url 'island_dashboard' %}" class="btn btn-secondary">Отмена</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
