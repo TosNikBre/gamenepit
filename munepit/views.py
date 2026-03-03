@@ -1115,65 +1115,98 @@ def britain_dashboard(request):
 
 @session_required
 def britain_sale(request):
-    """Продажа товара (п. 2.1)"""
+    """Продажа ресурса в Великобритании (п. 2.1)"""
     if request.method == 'POST':
         form = GoodsSaleForm(request.POST)
         if form.is_valid():
             good = form.cleaned_data['good']
             player_id = form.cleaned_data['player_id']
             quantity = form.cleaned_data['quantity']
-            money_input = form.cleaned_data['money_input']
-            
-            # Получаем динамическую цену
-            try:
-                dynamic_price, created = DynamicPrice.objects.get_or_create(
-                    good_name=good,
-                    defaults={
-                        'current_price': 100,
-                        'pmax': 100,
-                        'n_for_drop': 10,
-                        't_recovery': 300
-                    }
-                )
-                
-                # Проверяем восстановление цены
-                dynamic_price.check_recovery()
-                
-                price_per_unit = dynamic_price.current_price
-                total = quantity * float(price_per_unit)
-                
-                if money_input >= total:
-                    # Фиксируем продажу (цена упадет)
-                    dynamic_price.record_sale(quantity)
-                    
-                    change = float(money_input - total)
-                    
-                    # Запись в лог
-                    LogEntry.objects.create(
-                        author=request.current_user,
-                        table=request.current_table,
-                        action_type='sale',
-                        player_id=player_id,
-                        details={
-                            'good': good,
-                            'quantity': quantity,
-                            'price_per_unit': float(price_per_unit),
-                            'total': total,
-                            'money_input': float(money_input),
-                            'change': change
-                        }
-                    )
-                    
-                    messages.success(request, f'Продажа завершена. Сдача: {change:.2f}')
-                    return redirect('britain_dashboard')
-                else:
-                    messages.error(request, f'Недостаточно средств. Требуется: {total:.2f}')
-            except Exception as e:
-                messages.error(request, f'Ошибка: {str(e)}')
+
+            dynamic_price, _ = DynamicPrice.objects.get_or_create(
+                good_name=good,
+                defaults={
+                    'current_price': 100,
+                    'pmax': 100,
+                    'n_for_drop': 10,
+                    't_recovery': 300
+                }
+            )
+
+            dynamic_price.check_recovery()
+
+            player_balance = _get_player_resource_balance(player_id, good)
+            if player_balance < quantity:
+                form.add_error('quantity', f'Недостаточно ресурса у игрока. Доступно: {player_balance}, запрошено: {quantity}.')
+                messages.error(request, 'Операция отклонена: у игрока недостаточно ресурса.')
+            else:
+                price_per_unit = float(dynamic_price.current_price)
+                total = quantity * price_per_unit
+
+                good_labels = dict(GoodsSaleForm.GOODS_CHOICES)
+                request.session['pending_britain_sale'] = {
+                    'good': good,
+                    'good_label': good_labels.get(good, good),
+                    'player_id': player_id,
+                    'quantity': quantity,
+                    'price_per_unit': price_per_unit,
+                    'total': total,
+                }
+                return redirect('britain_sale_confirm')
     else:
         form = GoodsSaleForm()
-    
+
     return render(request, 'britain/sale.html', {'form': form})
+
+
+@session_required
+def britain_sale_confirm(request):
+    """Подтверждение продажи ресурса игроком в Великобритании"""
+    sale_data = request.session.get('pending_britain_sale')
+    if not sale_data:
+        return redirect('britain_sale')
+
+    if request.method == 'POST':
+        player_balance = _get_player_resource_balance(sale_data['player_id'], sale_data['good'])
+        required_quantity = int(sale_data.get('quantity', 0) or 0)
+        if player_balance < required_quantity:
+            messages.error(request, 'Подтверждение отменено: запасы игрока изменились, ресурса уже недостаточно.')
+            return redirect('britain_sale')
+
+        dynamic_price, _ = DynamicPrice.objects.get_or_create(
+            good_name=sale_data['good'],
+            defaults={
+                'current_price': sale_data['price_per_unit'],
+                'pmax': sale_data['price_per_unit'],
+                'n_for_drop': 10,
+                't_recovery': 300
+            }
+        )
+        dynamic_price.check_recovery()
+        dynamic_price.record_sale(required_quantity)
+
+        LogEntry.objects.create(
+            author=request.current_user,
+            table=request.current_table,
+            action_type='sale',
+            player_id=sale_data['player_id'],
+            details={
+                'good': sale_data['good'],
+                'resource_key': sale_data['good'],
+                'quantity': required_quantity,
+                'price_per_unit': sale_data['price_per_unit'],
+                'total': sale_data['total'],
+                'payout_to_player': sale_data['total'],
+                'operation': 'resource_buyback',
+                'stock_delta': -required_quantity,
+            }
+        )
+
+        del request.session['pending_britain_sale']
+        messages.success(request, f"Операция подтверждена. Выплатить игроку: {sale_data['total']:.2f}")
+        return redirect('britain_dashboard')
+
+    return render(request, 'britain/sale_confirm.html', {'sale': sale_data})
 
 
 @session_required
