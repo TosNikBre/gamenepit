@@ -237,17 +237,17 @@ class BuildingDemolitionForm(forms.Form):
 
 # Формы для стола "Великобритания"
 class GoodsSaleForm(forms.Form):
-    """Продажа товара"""
+    """Продажа ресурса в Великобритании (игрок сдает ресурс, стол выплачивает сумму)"""
     GOODS_CHOICES = [
-        ('textile', 'Ткань'),
-        ('rum', 'Ром'),
-        ('tools', 'Инструменты'),
-        ('weapons', 'Оружие'),
+        ('coffee', 'Кофейные зерна'),
+        ('cocoa', 'Какао бобы'),
+        ('tobacco', 'Табак'),
+        ('sugar_cane', 'Тростник'),
     ]
-    
+
     good = forms.ChoiceField(
         choices=GOODS_CHOICES,
-        label="Выберите товар",
+        label="Выберите ресурс",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
     player_id = forms.CharField(
@@ -265,16 +265,6 @@ class GoodsSaleForm(forms.Form):
             'class': 'form-control',
             'min': '1',
             'value': '1'
-        })
-    )
-    money_input = forms.DecimalField(
-        label="Внесено денег",
-        max_digits=10,
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'step': '0.01',
-            'placeholder': '0.00'
         })
     )
 

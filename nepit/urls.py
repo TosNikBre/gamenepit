@@ -34,6 +34,7 @@ urlpatterns = [
     # Стол "Великобритания"
     path('britain/', views.britain_dashboard, name='britain_dashboard'),
     path('britain/sale/', views.britain_sale, name='britain_sale'),
+    path('britain/sale/confirm/', views.britain_sale_confirm, name='britain_sale_confirm'),
     path('britain/ship-deal/', views.britain_ship_deal, name='britain_ship_deal'),
     path('britain/factory-work/', views.britain_factory_work, name='britain_factory_work'),
     path('britain/credits/', views.britain_credits, name='britain_credits'),
