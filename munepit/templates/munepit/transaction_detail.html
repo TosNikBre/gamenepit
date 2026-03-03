@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Детали транзакции{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Транзакция #{{ transaction.id }}</h3>
+    <a href="{% url 'transaction_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+  </div>
+  <div class="card"><div class="card-body">
+    <p><strong>Время:</strong> {{ transaction.timestamp }}</p>
+    <p><strong>Автор:</strong> {{ transaction.author }}</p>
+    <p><strong>Стол:</strong> {{ transaction.get_table_display }}</p>
+    <p><strong>Действие:</strong> {{ transaction.get_action_type_display }}</p>
+    <p><strong>Игрок:</strong> {{ transaction.player_id }}</p>
+    <pre>{{ transaction.details }}</pre>
+  </div></div>
+</div>
+{% endblock %}

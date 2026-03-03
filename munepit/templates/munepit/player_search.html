@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Поиск игрока{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Поиск игрока</h3>
+    <a href="javascript:history.back()" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+  </div>
+  <form method="get" class="mb-3 d-flex gap-2">
+    <input class="form-control" name="q" value="{{ query }}" placeholder="Номер игрока">
+    <button class="btn btn-primary" type="submit">Найти</button>
+  </form>
+  {% if player_info %}
+    <div class="card mb-3"><div class="card-body">
+      <p>Игрок: <strong>{{ player_info.id }}</strong>, операций: {{ player_info.transactions_count }}, сумма: {{ player_info.total_amount|floatformat:2 }}</p>
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'player_detail' player_info.id %}">Открыть карточку</a>
+    </div></div>
+  {% endif %}
+  <div class="card"><div class="card-body">
+    <h5>Последние совпадения</h5>
+    <ul class="list-group">
+      {% for item in results %}<li class="list-group-item">{{ item.timestamp }} | {{ item.get_action_type_display }} | {{ item.player_id }}</li>{% empty %}<li class="list-group-item text-muted">Нет данных</li>{% endfor %}
+    </ul>
+  </div></div>
+</div>
+{% endblock %}

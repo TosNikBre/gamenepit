@@ -6,6 +6,7 @@ from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
+from django.db.models import Count, Q
 from decimal import Decimal
 from datetime import timedelta
 import json
@@ -359,6 +360,8 @@ def login_view(request):
                 table=form.cleaned_data['table']
             )
             request.session['session_id'] = str(session.session_id)
+            request.session['username'] = session.username
+            request.session['table'] = session.table
             
             # Перенаправляем на соответствующий стол
             if session.table == 'island':
