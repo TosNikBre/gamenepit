@@ -6,6 +6,7 @@ from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
+from django.db.models import Count, Q
 from decimal import Decimal
 from datetime import timedelta
 import json
@@ -359,6 +360,8 @@ def login_view(request):
                 table=form.cleaned_data['table']
             )
             request.session['session_id'] = str(session.session_id)
+            request.session['username'] = session.username
+            request.session['table'] = session.table
             
             # Перенаправляем на соответствующий стол
             if session.table == 'island':
@@ -442,7 +445,11 @@ def island_court(request):
             convict = form.save(commit=False)
             convict.sentenced_by = request.current_user
             convict.save()
-            
+
+            Privateer.objects.filter(player_id=convict.player_id, is_active=True).update(is_active=False)
+            if convict.confiscation:
+                Credit.objects.filter(player_id=convict.player_id).delete()
+
             # Запись в лог
             LogEntry.objects.create(
                 author=request.current_user,
@@ -457,6 +464,10 @@ def island_court(request):
                 }
             )
             
+            money_input = form.cleaned_data.get('money_input') or Decimal('0')
+            fine_amount = Decimal(convict.fine_amount or 0)
+            change_due = float(money_input - fine_amount) if money_input >= fine_amount else None
+
             # Сохраняем для подтверждения
             request.session['pending_convict'] = {
                 'id': convict.id,
@@ -464,6 +475,8 @@ def island_court(request):
                 'player_name': convict.player_name,
                 'crime': convict.crime_description,
                 'fine': float(convict.fine_amount),
+                'money_input': float(money_input),
+                'change_due': change_due,
                 'confiscation': convict.confiscation,
                 'sentence': convict.sentence_years
             }
@@ -482,7 +495,11 @@ def island_court_confirm(request):
         return redirect('island_court')
     
     if request.method == 'POST':
-        messages.success(request, 'Приговор вынесен')
+        change_due = convict_data.get('change_due')
+        if change_due is not None:
+            messages.success(request, f'Приговор вынесен. Сдача по штрафу: {change_due:.2f}')
+        else:
+            messages.success(request, 'Приговор вынесен')
         del request.session['pending_convict']
         return redirect('island_dashboard')
     
@@ -957,22 +974,20 @@ def island_demolish(request):
         action_type='demolition',
         table='island'
     ).order_by('-timestamp')
+    recent_demolitions = []
+    for entry in demolitions_qs[:20]:
+        details = entry.details or {}
+        recent_demolitions.append({
+            'building_name': details.get('building', '—'),
+            'owner': details.get('owner', '—'),
+            'accumulated_profit': float(details.get('accumulated_profit', 0) or 0),
+            'timestamp': entry.timestamp,
+        })
 
-    total_demolitions = demolitions_qs.count()
-    demolitions_today = demolitions_qs.filter(timestamp__date=timezone.now().date()).count()
-    total_business_demolitions = demolitions_qs.filter(details__building_type='business').count()
-    total_compensation = sum(float(entry.details.get('accumulated_profit', 0) or 0) for entry in demolitions_qs)
-
-    recent_demolitions = demolitions_qs[:20]
-    
     return render(request, 'island/demolish.html', {
         'form': form,
         'buildings': buildings,
         'recent_demolitions': recent_demolitions,
-        'total_demolitions': total_demolitions,
-        'demolitions_today': demolitions_today,
-        'total_business_demolitions': total_business_demolitions,
-        'total_compensation': round(total_compensation, 2),
     })
 
 
@@ -1112,65 +1127,88 @@ def britain_dashboard(request):
 
 @session_required
 def britain_sale(request):
-    """Продажа товара (п. 2.1)"""
+    """Продажа ресурса в Великобритании (п. 2.1)"""
     if request.method == 'POST':
         form = GoodsSaleForm(request.POST)
         if form.is_valid():
             good = form.cleaned_data['good']
             player_id = form.cleaned_data['player_id']
             quantity = form.cleaned_data['quantity']
-            money_input = form.cleaned_data['money_input']
-            
-            # Получаем динамическую цену
-            try:
-                dynamic_price, created = DynamicPrice.objects.get_or_create(
-                    good_name=good,
-                    defaults={
-                        'current_price': 100,
-                        'pmax': 100,
-                        'n_for_drop': 10,
-                        't_recovery': 300
-                    }
-                )
-                
-                # Проверяем восстановление цены
-                dynamic_price.check_recovery()
-                
-                price_per_unit = dynamic_price.current_price
-                total = quantity * float(price_per_unit)
-                
-                if money_input >= total:
-                    # Фиксируем продажу (цена упадет)
-                    dynamic_price.record_sale(quantity)
-                    
-                    change = float(money_input - total)
-                    
-                    # Запись в лог
-                    LogEntry.objects.create(
-                        author=request.current_user,
-                        table=request.current_table,
-                        action_type='sale',
-                        player_id=player_id,
-                        details={
-                            'good': good,
-                            'quantity': quantity,
-                            'price_per_unit': float(price_per_unit),
-                            'total': total,
-                            'money_input': float(money_input),
-                            'change': change
-                        }
-                    )
-                    
-                    messages.success(request, f'Продажа завершена. Сдача: {change:.2f}')
-                    return redirect('britain_dashboard')
-                else:
-                    messages.error(request, f'Недостаточно средств. Требуется: {total:.2f}')
-            except Exception as e:
-                messages.error(request, f'Ошибка: {str(e)}')
+
+            dynamic_price, _ = DynamicPrice.objects.get_or_create(
+                good_name=good,
+                defaults={
+                    'current_price': 100,
+                    'pmax': 100,
+                    'n_for_drop': 10,
+                    't_recovery': 300
+                }
+            )
+
+            dynamic_price.check_recovery()
+            price_per_unit = float(dynamic_price.current_price)
+            total = quantity * price_per_unit
+
+            good_labels = dict(GoodsSaleForm.GOODS_CHOICES)
+            request.session['pending_britain_sale'] = {
+                'good': good,
+                'good_label': good_labels.get(good, good),
+                'player_id': player_id,
+                'quantity': quantity,
+                'price_per_unit': price_per_unit,
+                'total': total,
+            }
+            return redirect('britain_sale_confirm')
     else:
         form = GoodsSaleForm()
-    
+
     return render(request, 'britain/sale.html', {'form': form})
+
+
+@session_required
+def britain_sale_confirm(request):
+    """Подтверждение продажи ресурса игроком в Великобритании"""
+    sale_data = request.session.get('pending_britain_sale')
+    if not sale_data:
+        return redirect('britain_sale')
+
+    if request.method == 'POST':
+        required_quantity = int(sale_data.get('quantity', 0) or 0)
+
+        dynamic_price, _ = DynamicPrice.objects.get_or_create(
+            good_name=sale_data['good'],
+            defaults={
+                'current_price': sale_data['price_per_unit'],
+                'pmax': sale_data['price_per_unit'],
+                'n_for_drop': 10,
+                't_recovery': 300
+            }
+        )
+        dynamic_price.check_recovery()
+        dynamic_price.record_sale(required_quantity)
+
+        LogEntry.objects.create(
+            author=request.current_user,
+            table=request.current_table,
+            action_type='sale',
+            player_id=sale_data['player_id'],
+            details={
+                'good': sale_data['good'],
+                'resource_key': sale_data['good'],
+                'quantity': required_quantity,
+                'price_per_unit': sale_data['price_per_unit'],
+                'total': sale_data['total'],
+                'payout_to_player': sale_data['total'],
+                'operation': 'resource_buyback',
+                'stock_delta': -required_quantity,
+            }
+        )
+
+        del request.session['pending_britain_sale']
+        messages.success(request, f"Операция подтверждена. Выплатить игроку: {sale_data['total']:.2f}")
+        return redirect('britain_dashboard')
+
+    return render(request, 'britain/sale_confirm.html', {'sale': sale_data})
 
 
 @session_required
@@ -1286,12 +1324,25 @@ def britain_factory_work(request):
 @session_required
 def britain_credits(request):
     """Таблица кредитов (п. 2.4)"""
-    credits = Credit.objects.all()
+    credits = list(Credit.objects.all())
+    now = timezone.now()
     for credit in credits:
         credit.time_since = credit.time_since_last_payment()
-        credit.overdue = credit.is_overdue()
-    
-    return render(request, 'britain/credits.html', {'credits': credits})
+        diff_seconds = max(0, int((now - credit.last_payment_at).total_seconds()))
+        credit.overdue = diff_seconds > 600
+        credit.is_critical = diff_seconds > 900
+        paid_payments = max(0, credit.term_months - credit.remaining_payments)
+        credit.progress_percent = round((paid_payments / credit.term_months) * 100, 2) if credit.term_months else 0
+
+    context = {
+        'credits': credits,
+        'active_credits_count': len(credits),
+        'overdue_credits_count': sum(1 for c in credits if c.overdue),
+        'total_credit_amount': round(sum(float(c.credit_amount) for c in credits), 2),
+        'total_paid': round(sum(float(c.total_paid) for c in credits), 2),
+        'session': request.session,
+    }
+    return render(request, 'britain/credits.html', context)
 
 
 @session_required
@@ -1360,23 +1411,22 @@ def britain_credit_confirm(request):
 @session_required
 def britain_credit_payment(request):
     """Внесение платежа по кредиту (п. 2.4.2)"""
+    selected_debtor = request.GET.get('debtor')
+
     if request.method == 'POST':
         form = CreditPaymentForm(request.POST)
         if form.is_valid():
             credit = form.cleaned_data['debtor']
             amount = form.cleaned_data['payment_amount']
-            
-            # Вносим платеж
+
             closed = credit.make_payment(amount)
-            
             if closed:
                 credit.delete()
                 messages.success(request, f'Кредит полностью погашен!')
             else:
                 credit.save()
                 messages.success(request, f'Платеж принят. Осталось платежей: {credit.remaining_payments}')
-            
-            # Запись в лог
+
             LogEntry.objects.create(
                 author=request.current_user,
                 table=request.current_table,
@@ -1388,12 +1438,22 @@ def britain_credit_payment(request):
                     'closed': closed
                 }
             )
-            
+
             return redirect('britain_credits')
     else:
-        form = CreditPaymentForm()
-    
-    return render(request, 'britain/credit_payment.html', {'form': form})
+        initial = {'debtor': selected_debtor} if selected_debtor else None
+        form = CreditPaymentForm(initial=initial)
+
+    recent_payments = LogEntry.objects.filter(
+        table='britain',
+        action_type='credit_payment'
+    ).order_by('-timestamp')[:20]
+
+    return render(request, 'britain/credit_payment.html', {
+        'form': form,
+        'recent_payments': recent_payments,
+        'session': request.session,
+    })
 
 
 @session_required
@@ -1435,7 +1495,15 @@ def britain_coal(request):
 def britain_privateers(request):
     """Таблица каперов (п. 2.6)"""
     privateers = Privateer.objects.filter(is_active=True)
-    return render(request, 'britain/privateers.html', {'privateers': privateers})
+    context = {
+        'privateers': privateers,
+        'total_privateers': Privateer.objects.count(),
+        'active_privateers_count': privateers.count(),
+        'privateers_with_complaints': privateers.filter(complaints__gt=0).count(),
+        'total_tenure': sum(p.tenure().days for p in privateers),
+        'session': request.session,
+    }
+    return render(request, 'britain/privateers.html', context)
 
 
 @session_required
@@ -1589,32 +1657,91 @@ def britain_privateer_payment(request):
 
 @session_required
 def britain_quest(request):
-    """Принятие задания (п. 2.7)"""
+    """Операции с заданиями каперов (п. 2.7)"""
+    active_privateers = Privateer.objects.filter(is_active=True).order_by('player_id')
+
+    issue_logs = LogEntry.objects.filter(
+        table='britain',
+        action_type='quest_accept',
+        details__quest_status='issued'
+    ).order_by('-timestamp')
+    closed_quest_ids = set(
+        LogEntry.objects.filter(
+            table='britain',
+            action_type='quest_accept',
+            details__quest_status='accepted'
+        ).values_list('details__quest_id', flat=True)
+    )
+
+    active_quests = []
+    now = timezone.now()
+    for log in issue_logs:
+        details = log.details or {}
+        quest_id = details.get('quest_id')
+        if not quest_id or quest_id in closed_quest_ids:
+            continue
+        active_quests.append({
+            'quest_id': quest_id,
+            'player_id': log.player_id,
+            'reward': details.get('reward', 0),
+            'description': details.get('description', ''),
+            'issued_at': log.timestamp,
+            'elapsed_seconds': int((now - log.timestamp).total_seconds()),
+        })
+
     if request.method == 'POST':
-        form = QuestAcceptForm(request.POST)
+        form = QuestAcceptForm(request.POST, active_quests=active_quests)
         if form.is_valid():
-            privateer = form.cleaned_data['privateer']
-            reward = form.cleaned_data['reward']
-            description = form.cleaned_data['description']
-            
-            # Запись в лог
-            LogEntry.objects.create(
-                author=request.current_user,
-                table=request.current_table,
-                action_type='quest_accept',
-                player_id=privateer.player_id,
-                details={
-                    'reward': float(reward),
-                    'description': description
-                }
-            )
-            
-            messages.success(request, f'Задание принято')
-            return redirect('britain_dashboard')
+            if form.cleaned_data['mode'] == 'issue':
+                privateer = form.cleaned_data['privateer']
+                reward = form.cleaned_data['reward']
+                description = form.cleaned_data['description']
+                quest_id = f"q-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
+
+                LogEntry.objects.create(
+                    author=request.current_user,
+                    table=request.current_table,
+                    action_type='quest_accept',
+                    player_id=privateer.player_id,
+                    details={
+                        'quest_id': quest_id,
+                        'quest_status': 'issued',
+                        'reward': float(reward),
+                        'description': description,
+                    }
+                )
+                messages.success(request, f'Задание выдано каперу #{privateer.player_id}')
+            else:
+                quest_id = form.cleaned_data['issued_quest']
+                source = next((q for q in active_quests if q['quest_id'] == quest_id), None)
+                if not source:
+                    messages.error(request, 'Задание не найдено в списке активных.')
+                    return redirect('britain_quest')
+
+                LogEntry.objects.create(
+                    author=request.current_user,
+                    table=request.current_table,
+                    action_type='quest_accept',
+                    player_id=source['player_id'],
+                    details={
+                        'quest_id': quest_id,
+                        'quest_status': 'accepted',
+                        'reward': float(source['reward']),
+                        'description': source['description'],
+                    }
+                )
+                messages.success(request, f"Задание для игрока #{source['player_id']} принято")
+
+            return redirect('britain_quest')
     else:
-        form = QuestAcceptForm()
-    
-    return render(request, 'britain/quest.html', {'form': form})
+        form = QuestAcceptForm(active_quests=active_quests)
+
+    return render(request, 'britain/quest.html', {
+        'form': form,
+        'active_privateers': active_privateers,
+        'active_quests': active_quests,
+        'session': request.session,
+    })
 
 
 # API для получения данных (AJAX)

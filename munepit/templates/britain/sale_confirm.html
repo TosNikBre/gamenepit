@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Подтверждение продажи ресурса{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Подтверждение операции</h3>
+    <a href="{% url 'britain_sale' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <p>Ресурс: <strong>{{ sale.good_label }}</strong></p>
+      <p>Игрок: <strong>{{ sale.player_id }}</strong></p>
+      <p>Количество: <strong>{{ sale.quantity }}</strong></p>
+      <p>Цена за единицу: <strong>{{ sale.price_per_unit }}</strong></p>
+      <p class="fs-5">К выплате игроку: <strong>{{ sale.total }}</strong></p>
+
+      <form method="post">
+        {% csrf_token %}
+        <button class="btn btn-success" type="submit">Подтвердить и записать выплату</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

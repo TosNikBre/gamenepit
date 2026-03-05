@@ -102,6 +102,7 @@
                                             data-remaining="{{ debtor.remaining_payments }}"
                                             data-term="{{ debtor.term_months }}"
                                             data-overdue="{{ debtor.is_overdue|lower }}"
+                                            data-last="{{ debtor.last_payment_at|date:'U' }}"
                                             {% if form.debtor.value|stringformat:"s" == debtor.id|stringformat:"s" %}selected{% endif %}>
                                         Игрок #{{ debtor.player_id }} - {{ debtor.remaining_payments }}/{{ debtor.term_months }} платежей
                                         ({{ debtor.credit_amount }} ₽)
@@ -397,7 +398,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Таймер (здесь должен быть реальный timestamp)
             timer.style.display = 'block';
-            updateTimer(Math.floor(Date.now() / 1000) - 300); // Пример: 5 минут назад
+            updateTimer(parseInt(selected.dataset.last || Math.floor(Date.now() / 1000)));
             
             updateCalculation();
         } else {

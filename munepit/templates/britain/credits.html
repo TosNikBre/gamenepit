@@ -152,9 +152,9 @@
                     </thead>
                     <tbody>
                         {% for credit in credits %}
-                        <tr class="{% if credit.is_overdue %}overdue-row{% endif %}"
+                        <tr class="{% if credit.overdue %}overdue-row{% endif %}"
                             data-player="{{ credit.player_id }}"
-                            data-status="{% if credit.is_overdue %}overdue{% else %}normal{% endif %}"
+                            data-status="{% if credit.is_critical %}critical{% elif credit.overdue %}overdue{% else %}normal{% endif %}"
                             data-time="{{ credit.last_payment_at|date:'U' }}">
                             <td>
                                 <strong>#{{ credit.player_id }}</strong>
@@ -172,25 +172,22 @@
                                 </span>
                             </td>
                             <td style="width: 150px;">
-                                {% with progress=credit.term_months|add:credit.remaining_payments %}
                                 <div class="progress payment-progress">
-                                    <div class="progress-bar bg-success" 
-                                         style="width: {% widthratio credit.term_months|add:credit.remaining_payments credit.term_months 100 %}">
-                                    </div>
+                                    <div class="progress-bar bg-success" style="width: {{ credit.progress_percent }}%"></div>
                                 </div>
-                                {% endwith %}
+                                <small class="text-muted">{{ credit.progress_percent }}%</small>
                             </td>
                             <td>
                                 <span class="last-payment-time" data-timestamp="{{ credit.last_payment_at|date:'U' }}">
                                     {{ credit.last_payment_at|date:"d.m.Y H:i" }}
                                 </span>
-                                {% if credit.is_overdue %}
-                                    <span class="timer-danger">⚠️</span>
-                                {% endif %}
+
                             </td>
                             <td>
-                                {% if credit.is_overdue %}
-                                    <span class="badge bg-danger">Просрочка</span>
+                                {% if credit.is_critical %}
+                                    <span class="badge bg-danger">Критический</span>
+                                {% elif credit.overdue %}
+                                    <span class="badge bg-warning text-dark">Просрочка</span>
                                 {% else %}
                                     <span class="badge bg-success">Активен</span>
                                 {% endif %}
@@ -245,16 +242,23 @@
 function updateTimers() {
     const now = Math.floor(Date.now() / 1000);
     const paymentTimes = document.querySelectorAll('.last-payment-time');
-    
+
     paymentTimes.forEach(el => {
         const timestamp = parseInt(el.dataset.timestamp);
         const diff = now - timestamp;
-        
-        if (diff > 600) { // 10 минут
-            el.closest('tr').classList.add('overdue-row');
-            const minutes = Math.floor(diff / 60);
-            el.innerHTML = el.innerHTML.split('<')[0] + ` <span class="timer-danger">(${minutes} мин просрочки)</span>`;
+        const minutes = Math.floor(diff / 60);
+        const baseText = el.dataset.base || el.textContent.trim();
+        el.dataset.base = baseText;
+
+        let suffix = '';
+        if (diff > 900) {
+            suffix = ` <span class="timer-danger">(${minutes} мин, критично)</span>`;
+        } else if (diff > 600) {
+            suffix = ` <span class="text-danger">(${minutes} мин просрочки)</span>`;
+        } else {
+            suffix = ` <span class="text-muted">(${minutes} мин с последнего платежа)</span>`;
         }
+        el.innerHTML = baseText + suffix;
     });
 }
 
@@ -281,6 +285,8 @@ function filterTable() {
         if (statusFilter === 'overdue' && status !== 'overdue') {
             show = false;
         } else if (statusFilter === 'normal' && status !== 'normal') {
+            show = false;
+        } else if (statusFilter === 'critical' && status !== 'critical') {
             show = false;
         }
         

@@ -51,6 +51,19 @@ class DealForm(forms.Form):
 
 class CourtForm(forms.ModelForm):
     """Форма суда"""
+
+    money_input = forms.DecimalField(
+        label='Внесено денег',
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+        required=False,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'placeholder': '0.00'
+        })
+    )
     class Meta:
         model = Convict
         fields = ['player_id', 'player_name', 'crime_description', 'fine_amount', 'confiscation', 'sentence_years']
@@ -237,17 +250,17 @@ class BuildingDemolitionForm(forms.Form):
 
 # Формы для стола "Великобритания"
 class GoodsSaleForm(forms.Form):
-    """Продажа товара"""
+    """Продажа ресурса в Великобритании (игрок сдает ресурс, стол выплачивает сумму)"""
     GOODS_CHOICES = [
-        ('textile', 'Ткань'),
-        ('rum', 'Ром'),
-        ('tools', 'Инструменты'),
-        ('weapons', 'Оружие'),
+        ('coffee', 'Кофейные зерна'),
+        ('cocoa', 'Какао бобы'),
+        ('tobacco', 'Табак'),
+        ('sugar_cane', 'Тростник'),
     ]
-    
+
     good = forms.ChoiceField(
         choices=GOODS_CHOICES,
-        label="Выберите товар",
+        label="Выберите ресурс",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
     player_id = forms.CharField(
@@ -265,16 +278,6 @@ class GoodsSaleForm(forms.Form):
             'class': 'form-control',
             'min': '1',
             'value': '1'
-        })
-    )
-    money_input = forms.DecimalField(
-        label="Внесено денег",
-        max_digits=10,
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'step': '0.01',
-            'placeholder': '0.00'
         })
     )
 
@@ -521,12 +524,30 @@ class PrivateerPaymentForm(forms.Form):
 
 
 class QuestAcceptForm(forms.Form):
-    """Принятие задания"""
+    """Операции с заданиями каперов (выдача/принятие)"""
+    MODE_CHOICES = [
+        ('issue', 'Выдать задание'),
+        ('accept', 'Принять задание'),
+    ]
+
+    mode = forms.ChoiceField(
+        choices=MODE_CHOICES,
+        label="Режим",
+        widget=forms.RadioSelect(attrs={'class': 'form-check-input'}),
+        initial='issue'
+    )
     privateer = forms.ModelChoiceField(
         queryset=Privateer.objects.filter(is_active=True),
         label="Выберите капера",
         widget=forms.Select(attrs={'class': 'form-control'}),
-        empty_label="--------- Выберите капера ---------"
+        empty_label="--------- Выберите капера ---------",
+        required=False,
+    )
+    issued_quest = forms.ChoiceField(
+        choices=(),
+        label='Выберите выданное задание',
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
     )
     reward = forms.DecimalField(
         label="Сумма выплаты",
@@ -547,3 +568,30 @@ class QuestAcceptForm(forms.Form):
             'placeholder': 'Опишите задание'
         })
     )
+
+    def __init__(self, *args, active_quests=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        quest_choices = [('', '--------- Выберите выданное задание ---------')]
+        for quest in (active_quests or []):
+            quest_choices.append((
+                quest['quest_id'],
+                f"Игрок #{quest['player_id']} | {quest['reward']} ₽ | {quest['description'][:50]}"
+            ))
+        self.fields['issued_quest'].choices = quest_choices
+
+    def clean(self):
+        cleaned_data = super().clean()
+        mode = cleaned_data.get('mode')
+
+        if mode == 'issue':
+            if not cleaned_data.get('privateer'):
+                self.add_error('privateer', 'Выберите капера для выдачи задания.')
+            if not cleaned_data.get('description'):
+                self.add_error('description', 'Добавьте описание задания.')
+            if cleaned_data.get('reward') is None:
+                self.add_error('reward', 'Укажите вознаграждение.')
+        elif mode == 'accept':
+            if not cleaned_data.get('issued_quest'):
+                self.add_error('issued_quest', 'Выберите выданное задание для принятия.')
+
+        return cleaned_data
