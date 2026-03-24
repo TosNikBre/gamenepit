@@ -2,184 +2,66 @@
 
 {% block title %}Покупка ресурса - Остров{% endblock %}
 
-{% block extra_css %}
-<style>
-    .resource-card {
-        transition: all 0.3s;
-        cursor: pointer;
-        border: 2px solid transparent;
-        height: 100%;
-    }
-    .resource-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    }
-    .resource-card.selected {
-        border-color: #28a745;
-        background-color: #f0fff0;
-    }
-    .resource-icon {
-        font-size: 48px;
-        margin-bottom: 15px;
-    }
-    .price-tag {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #28a745;
-    }
-    .stock-badge {
-        background: #e9ecef;
-        padding: 5px 10px;
-        border-radius: 20px;
-        font-size: 0.9rem;
-    }
-    .total-price {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #007bff;
-        animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-    .market-info {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-    .resource-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 10px;
-        border-bottom: 1px solid #dee2e6;
-    }
-    .resource-row:last-child {
-        border-bottom: none;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="container">
     <div class="page-header">
         <div class="d-flex justify-content-between align-items-center">
             <h2><i class="bi bi-basket"></i> Покупка ресурса</h2>
             <div>
-                
-                <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                <span class="badge bg-success me-2">{{ session.username }}</span>
+                <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-secondary">
                     <i class="bi bi-arrow-left"></i> Назад
                 </a>
             </div>
         </div>
-        <p class="text-muted">Приобретение ресурсов для производства и строительства</p>
     </div>
 
-    <!-- Рыночная информация -->
-    <div class="market-info mb-4">
-        <div class="row">
-            <div class="col-md-4 text-center">
-                <h3>{{ resources_count|default:'4' }}</h3>
-                <small>Доступно ресурсов</small>
+    <!-- Отображение сообщений -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
-            <div class="col-md-4 text-center">
-                <h3>{{ today_sales|default:'0' }}</h3>
-                <small>Продаж сегодня</small>
-            </div>
-            <div class="col-md-4 text-center">
-                <h3>{{ total_revenue|default:'0' }} ₽</h3>
-                <small>Выручка за день</small>
-            </div>
-        </div>
-    </div>
+        {% endfor %}
+    {% endif %}
 
-    <div class="row">
-        <!-- Форма покупки -->
-        <div class="col-md-7 mb-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
             <div class="card">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0"><i class="bi bi-cart"></i> Оформление покупки</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" id="purchaseForm" novalidate>
+                    
+                    {% if not resources %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Нет доступных ресурсов для покупки.
+                    </div>
+                    {% endif %}
+
+                    <form method="post" id="purchaseForm">
                         {% csrf_token %}
                         
-                        {% if form.non_field_errors %}
-                            <div class="alert alert-danger">
-                                {% for error in form.non_field_errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-
-                        <!-- Выбор ресурса (визуальные карточки) -->
+                        <!-- Выбор ресурса -->
                         <div class="mb-4">
-                            <label class="form-label fw-bold">Выберите ресурс <span class="text-danger">*</span></label>
-                            
-                            {% if resources %}
-                            <div class="row" id="resourceCards">
+                            <label for="{{ form.resource.id_for_label }}" class="form-label fw-bold">
+                                {{ form.resource.label }} <span class="text-danger">*</span>
+                            </label>
+                            <select name="{{ form.resource.name }}"
+                                    id="{{ form.resource.id_for_label }}"
+                                    class="form-control form-control-lg"
+                                    required>
+                                <option value="">-- Выберите ресурс --</option>
                                 {% for resource in resources %}
-                                <div class="col-md-6 mb-3">
-                                    <div class="card resource-card" 
-                                         data-resource-id="{{ resource.id }}"
-                                         data-resource-name="{{ resource.name }}"
-                                         data-resource-price="{{ resource.base_price }}"
-                                         onclick="selectResource('{{ resource.id }}', '{{ resource.name }}', {{ resource.base_price }})">
-                                        <div class="card-body text-center">
-                                            <div class="resource-icon">
-                                                {% if 'коф' in resource.name|lower %}
-                                                    ☕
-                                                {% elif 'какао' in resource.name|lower %}
-                                                    🍫
-                                                {% elif 'табак' in resource.name|lower %}
-                                                    🚬
-                                                {% elif 'тростник' in resource.name|lower %}
-                                                    🎋
-                                                {% elif 'древ' in resource.name|lower %}
-                                                    🌲
-                                                {% elif 'камень' in resource.name|lower %}
-                                                    🪨
-                                                {% elif 'желез' in resource.name|lower %}
-                                                    ⚒️
-                                                {% elif 'уголь' in resource.name|lower %}
-                                                    ⚫
-                                                {% elif 'хлопок' in resource.name|lower %}
-                                                    🌿
-                                                {% else %}
-                                                    📦
-                                                {% endif %}
-                                            </div>
-                                            <h6>{{ resource.name }}</h6>
-                                            <div class="price-tag">{{ resource.base_price }} ₽</div>
-                                            <div class="mt-2">
-                                                <span class="stock-badge">
-                                                    <i class="bi bi-box"></i> в наличии
-                                                </span>
-                                            </div>
-                                            <small class="text-muted d-block mt-2">{{ resource.description|truncatechars:50 }}</small>
-                                        </div>
-                                    </div>
-                                </div>
+                                    <option value="{{ resource.id }}" 
+                                            data-price="{{ resource.base_price }}"
+                                            {% if form.resource.value|stringformat:"s" == resource.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ resource.name }} - {{ resource.base_price }} ₽
+                                    </option>
                                 {% endfor %}
-                            </div>
-                            {% else %}
-                            <div class="alert alert-warning">
-                                <i class="bi bi-exclamation-triangle"></i>
-                                Нет доступных ресурсов для покупки.
-                                <br>Сначала выполните команду: <code>python manage.py init_prices</code>
-                                <br>или добавьте ресурсы через <a href="/admin/munepit/pricelist/" target="_blank">админ-панель</a>.
-                            </div>
-                            {% endif %}
-                            
-                            <input type="hidden" name="{{ form.resource.name }}" id="{{ form.resource.id_for_label }}" value="{{ form.resource.value|default:'' }}">
-                            {% if form.resource.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.resource.errors.0 }}
-                                </div>
-                            {% endif %}
+                            </select>
                         </div>
 
                         <!-- Номер игрока -->
@@ -187,25 +69,13 @@
                             <label for="{{ form.player_id.id_for_label }}" class="form-label fw-bold">
                                 {{ form.player_id.label }} <span class="text-danger">*</span>
                             </label>
-                            <div class="input-group">
-                                <span class="input-group-text">#</span>
-                                <input type="text" 
-                                       name="{{ form.player_id.name }}"
-                                       id="{{ form.player_id.id_for_label }}"
-                                       class="form-control form-control-lg {% if form.player_id.errors %}is-invalid{% endif %}"
-                                       value="{{ form.player_id.value|default:'' }}"
-                                       placeholder="Введите номер игрока"
-                                       required>
-                                <button class="btn btn-outline-secondary" type="button" id="checkPlayerBtn">
-                                    <i class="bi bi-search"></i>
-                                </button>
-                            </div>
-                            {% if form.player_id.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.player_id.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <div class="form-text" id="playerInfo"></div>
+                            <input type="text" 
+                                   name="{{ form.player_id.name }}"
+                                   id="{{ form.player_id.id_for_label }}"
+                                   class="form-control form-control-lg"
+                                   value="{{ form.player_id.value|default:'' }}"
+                                   placeholder="Введите номер игрока"
+                                   required>
                         </div>
 
                         <!-- Количество -->
@@ -216,33 +86,28 @@
                             <input type="number" 
                                    name="{{ form.quantity.name }}"
                                    id="{{ form.quantity.id_for_label }}"
-                                   class="form-control form-control-lg {% if form.quantity.errors %}is-invalid{% endif %}"
+                                   class="form-control form-control-lg"
                                    value="{{ form.quantity.value|default:'1' }}"
                                    min="1"
                                    max="1000"
-                                   step="1"
-                                   {% if not resources %}disabled{% endif %}
                                    required>
-                            {% if form.quantity.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.quantity.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <div class="form-text">Максимум: 1000 единиц за раз</div>
                         </div>
 
-                        <!-- Информация о покупке -->
-                        <div class="card bg-light mb-4" id="purchaseInfo" style="display: none;">
+                        <!-- Информация о стоимости -->
+                        <div class="card bg-light mb-4">
                             <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h6>Выбранный ресурс:</h6>
-                                        <h4 id="selectedResourceName">—</h4>
-                                        <p class="mb-1">Цена за единицу: <strong id="selectedResourcePrice">0</strong> ₽</p>
+                                <div class="row text-center">
+                                    <div class="col-md-4">
+                                        <h6>Цена за единицу</h6>
+                                        <h3 id="pricePerUnit" class="text-primary">0 ₽</h3>
                                     </div>
-                                    <div class="col-md-6 text-center">
-                                        <div class="total-price" id="totalCost">0 ₽</div>
-                                        <p class="mb-0">Итого к оплате</p>
+                                    <div class="col-md-4">
+                                        <h6>Количество</h6>
+                                        <h3 id="displayQuantity" class="text-info">0</h3>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <h6>Итого</h6>
+                                        <h3 id="totalCost" class="text-success">0 ₽</h3>
                                     </div>
                                 </div>
                             </div>
@@ -250,124 +115,43 @@
 
                         <!-- Внесено денег -->
                         <div class="mb-4">
-                            <label class="form-label fw-bold">Внесено денег <span class="text-danger">*</span></label>
+                            <label for="moneyInput" class="form-label fw-bold">
+                                Внесено денег <span class="text-danger">*</span>
+                            </label>
                             <div class="input-group">
                                 <input type="number" 
                                        id="moneyInput"
+                                       name="money_input"
                                        class="form-control form-control-lg"
                                        step="0.01"
                                        min="0"
+                                       value="0"
                                        placeholder="0.00"
-                                       {% if not resources %}disabled{% endif %}
                                        required>
                                 <span class="input-group-text">₽</span>
                             </div>
                         </div>
 
                         <!-- Блок сдачи -->
-                        <div class="card bg-success text-white mb-4" id="changeBlock" style="display: none;">
-                            <div class="card-body">
-                                <h5 class="mb-0">Сдача: <span id="changeAmount">0.00</span> ₽</h5>
-                            </div>
+                        <div class="alert alert-success" id="changeBlock" style="display: none;">
+                            <strong>Сдача:</strong> <span id="changeAmount">0.00</span> ₽
                         </div>
 
                         <!-- Блок ошибки -->
-                        <div class="alert alert-danger mb-4" id="errorBlock" style="display: none;">
-                            <i class="bi bi-exclamation-triangle"></i> 
-                            Недостаточно средств! Требуется: <span id="requiredAmount">0.00</span> ₽
+                        <div class="alert alert-danger" id="errorBlock" style="display: none;">
+                            <strong>Недостаточно средств!</strong> Требуется: <span id="requiredAmount">0.00</span> ₽
                         </div>
 
                         <!-- Кнопки -->
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{% url 'island_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
-                                <i class="bi bi-x-circle"></i> Отмена
-                            </a>
-                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn" {% if not resources %}disabled{% endif %}>
-                                <i class="bi bi-check-circle"></i> Купить
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn" disabled>
+                                Купить
                             </button>
+                            <a href="{% url 'island_dashboard' %}" class="btn btn-secondary btn-lg">
+                                Отмена
+                            </a>
                         </div>
                     </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Информационная панель -->
-        <div class="col-md-5 mb-4">
-            <!-- Прайс-лист -->
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-list"></i> Прайс-лист</h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Ресурс</th>
-                                    <th>Цена</th>
-                                    <th>Доступно</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for resource in resources %}
-                                <tr>
-                                    <td>
-                                        {% if 'коф' in resource.name|lower %}☕{% endif %}
-                                        {% if 'какао' in resource.name|lower %}🍫{% endif %}
-                                        {% if 'табак' in resource.name|lower %}🚬{% endif %}
-                                        {% if 'тростник' in resource.name|lower %}🎋{% endif %}
-                                        {% if 'древ' in resource.name|lower %}🌲{% endif %}
-                                        {% if 'камень' in resource.name|lower %}🪨{% endif %}
-                                        {{ resource.name }}
-                                    </td>
-                                    <td><span class="badge bg-success">{{ resource.base_price }} ₽</span></td>
-                                    <td><span class="badge bg-info">∞</span></td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="3" class="text-center text-muted">
-                                        Нет доступных ресурсов
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Информация об игроке -->
-            <div class="card mb-4">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-person"></i> Информация об игроке</h5>
-                </div>
-                <div class="card-body" id="playerDetails">
-                    <p class="text-muted mb-0">Введите номер игрока для просмотра</p>
-                </div>
-            </div>
-
-            <!-- Последние покупки -->
-            <div class="card">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние покупки</h5>
-                </div>
-                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                    {% for purchase in recent_purchases|slice:":10" %}
-                    <div class="border-bottom mb-2 pb-2">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <strong>Игрок #{{ purchase.player_id }}</strong>
-                                <br><small class="text-muted">{{ purchase.resource }}</small>
-                            </div>
-                            <div class="text-end">
-                                <span class="badge bg-success">{{ purchase.amount }} ₽</span>
-                                <br><small class="text-muted">{{ purchase.timestamp|time:"H:i" }}</small>
-                            </div>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <p class="text-muted text-center mb-0">Нет покупок</p>
-                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -376,145 +160,60 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Элементы формы
-    const resourceInput = document.getElementById('{{ form.resource.id_for_label }}');
-    const playerInput = document.getElementById('{{ form.player_id.id_for_label }}');
+    const resourceSelect = document.getElementById('{{ form.resource.id_for_label }}');
     const quantityInput = document.getElementById('{{ form.quantity.id_for_label }}');
     const moneyInput = document.getElementById('moneyInput');
     const submitBtn = document.getElementById('submitBtn');
     
-    // Информационные элементы
-    const purchaseInfo = document.getElementById('purchaseInfo');
-    const selectedResourceName = document.getElementById('selectedResourceName');
-    const selectedResourcePrice = document.getElementById('selectedResourcePrice');
-    const totalCost = document.getElementById('totalCost');
-    const playerInfo = document.getElementById('playerInfo');
-    const playerDetails = document.getElementById('playerDetails');
+    const pricePerUnitSpan = document.getElementById('pricePerUnit');
+    const displayQuantitySpan = document.getElementById('displayQuantity');
+    const totalCostSpan = document.getElementById('totalCost');
     const changeBlock = document.getElementById('changeBlock');
     const changeAmount = document.getElementById('changeAmount');
     const errorBlock = document.getElementById('errorBlock');
     const requiredAmount = document.getElementById('requiredAmount');
 
-    let currentResource = null;
-    let currentPrice = 0;
-
-    // Функция выбора ресурса
-    window.selectResource = function(resourceId, resourceName, resourcePrice) {
-        // Убираем выделение со всех карточек
-        document.querySelectorAll('.resource-card').forEach(c => {
-            c.classList.remove('selected');
-        });
-        
-        // Выделяем выбранную карточку
-        const selectedCard = document.querySelector(`[data-resource-id="${resourceId}"]`);
-        if (selectedCard) {
-            selectedCard.classList.add('selected');
-        }
-        
-        // Сохраняем данные
-        currentResource = resourceId;
-        currentPrice = resourcePrice;
-        resourceInput.value = resourceId;
+    function updateCalculation() {
+        const selectedOption = resourceSelect.options[resourceSelect.selectedIndex];
+        const price = selectedOption && selectedOption.value ? parseFloat(selectedOption.dataset.price) : 0;
+        const quantity = parseInt(quantityInput.value) || 0;
+        const money = parseFloat(moneyInput.value) || 0;
+        const total = price * quantity;
         
         // Обновляем отображение
-        purchaseInfo.style.display = 'block';
-        selectedResourceName.textContent = resourceName;
-        selectedResourcePrice.textContent = resourcePrice.toFixed(2);
+        pricePerUnitSpan.textContent = price.toFixed(2) + ' ₽';
+        displayQuantitySpan.textContent = quantity;
+        totalCostSpan.textContent = total.toFixed(2) + ' ₽';
         
-        updateTotal();
-    };
-
-    // Функция обновления общей стоимости
-    function updateTotal() {
-        const quantity = parseInt(quantityInput.value) || 0;
+        // Скрываем оба блока по умолчанию
+        changeBlock.style.display = 'none';
+        errorBlock.style.display = 'none';
         
-        if (currentResource && quantity > 0) {
-            const total = currentPrice * quantity;
-            totalCost.textContent = total.toFixed(2) + ' ₽';
-            checkFunds(total);
+        if (price > 0 && quantity > 0) {
+            if (money >= total) {
+                // Денег достаточно - показываем сдачу
+                const change = money - total;
+                changeAmount.textContent = change.toFixed(2) + ' ₽';
+                changeBlock.style.display = 'block';
+                submitBtn.disabled = false;
+            } else {
+                // Денег недостаточно - показываем ошибку
+                const shortage = total - money;
+                requiredAmount.textContent = shortage.toFixed(2) + ' ₽';
+                errorBlock.style.display = 'block';
+                submitBtn.disabled = true;
+            }
         } else {
-            totalCost.textContent = '0 ₽';
-            changeBlock.style.display = 'none';
-            errorBlock.style.display = 'none';
             submitBtn.disabled = true;
         }
     }
 
-    // Функция проверки достаточности средств
-    function checkFunds(required) {
-        const money = parseFloat(moneyInput.value) || 0;
-        
-        if (money >= required) {
-            const change = money - required;
-            changeAmount.textContent = change.toFixed(2);
-            changeBlock.style.display = 'block';
-            errorBlock.style.display = 'none';
-            submitBtn.disabled = false;
-        } else {
-            changeBlock.style.display = 'none';
-            errorBlock.style.display = 'block';
-            requiredAmount.textContent = required.toFixed(2);
-            submitBtn.disabled = true;
-        }
-    }
-
-    // Функция проверки игрока
-    function checkPlayer() {
-        const playerId = playerInput.value.trim();
-        
-        if (playerId) {
-            playerInfo.innerHTML = `<span class="text-success">✓ Игрок #${playerId} найден</span>`;
-            
-            playerDetails.innerHTML = `
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="bi bi-person-circle fs-1"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6>Игрок #${playerId}</h6>
-                        <p class="mb-1"><i class="bi bi-cash"></i> Баланс: 10,000 ₽</p>
-                        <p class="mb-1"><i class="bi bi-box"></i> Ресурсов: 1,200 ед.</p>
-                        <small class="text-muted">Последняя активность: сегодня</small>
-                    </div>
-                </div>
-            `;
-        } else {
-            playerInfo.innerHTML = '';
-            playerDetails.innerHTML = '<p class="text-muted mb-0">Введите номер игрока для просмотра</p>';
-        }
-    }
-
-    // События
-    quantityInput.addEventListener('input', updateTotal);
-    moneyInput.addEventListener('input', function() {
-        if (currentResource) {
-            const quantity = parseInt(quantityInput.value) || 0;
-            const total = currentPrice * quantity;
-            checkFunds(total);
-        }
-    });
-    
-    document.getElementById('checkPlayerBtn').addEventListener('click', checkPlayer);
-    playerInput.addEventListener('blur', checkPlayer);
+    resourceSelect.addEventListener('change', updateCalculation);
+    quantityInput.addEventListener('input', updateCalculation);
+    moneyInput.addEventListener('input', updateCalculation);
 
     // Инициализация
-    {% if form.resource.value %}
-        // Найти ресурс по ID и выбрать его
-        const resourceId = '{{ form.resource.value }}';
-        const resourceCard = document.querySelector(`[data-resource-id="${resourceId}"]`);
-        if (resourceCard) {
-            selectResource(
-                resourceId,
-                resourceCard.dataset.resourceName,
-                parseFloat(resourceCard.dataset.resourcePrice)
-            );
-        }
-    {% endif %}
-    
-    {% if form.player_id.value %}
-        playerInput.value = '{{ form.player_id.value }}';
-        checkPlayer();
-    {% endif %}
+    updateCalculation();
 });
 </script>
 {% endblock %}

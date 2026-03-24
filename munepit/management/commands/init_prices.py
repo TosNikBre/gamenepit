@@ -1,7 +1,6 @@
 # munepit/management/commands/init_prices.py
 from django.core.management.base import BaseCommand
 from munepit.models import PriceList
-from django.utils import timezone
 
 class Command(BaseCommand):
     help = 'Инициализация прайс-листа со всеми товарами, зданиями и ресурсами'
@@ -14,348 +13,561 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        # Очистка существующих записей если указан флаг --clear
         if options['clear']:
             self.stdout.write(self.style.WARNING('Очистка существующих записей...'))
             PriceList.objects.all().delete()
             self.stdout.write(self.style.SUCCESS('Все записи удалены'))
 
-        # === ЗДАНИЯ ДЛЯ ОСТРОВА ===
-        buildings = [
-            # Фабрики (производственные здания)
+        # === СЫРЬЕ (ресурсы) ===
+        recipes = [
+            # === ПОЛУФАБРИКАТЫ ===
             {
-                'name': 'Маленькая фабрика',
-                'category': 'building',
-                'base_price': 500,
-                'description': 'Небольшое производственное помещение. Позволяет обрабатывать ресурсы.'
+                'name': 'Какао-порошок',
+                'category': 'intermediate',
+                'output_quantity': 1,
+                'production_time': 6,
+                'ingredients': {'Какао-бобы': 8},
+                'base_price': 15,
+                'description': 'Перемолотые какао-бобы. Основа для шоколада.'
             },
             {
-                'name': 'Средняя фабрика',
-                'category': 'building',
-                'base_price': 1000,
-                'description': 'Среднее производственное помещение. Увеличенная скорость обработки.'
+                'name': 'Молотый кофе',
+                'category': 'intermediate',
+                'output_quantity': 1,
+                'production_time': 6,
+                'ingredients': {'Кофейные зерна': 8},
+                'base_price': 17,
+                'description': 'Перемолотые кофейные зерна. Основа для напитков.'
             },
             {
-                'name': 'Большая фабрика',
-                'category': 'building',
-                'base_price': 2000,
-                'description': 'Крупное производственное помещение. Высокая производительность.'
+                'name': 'Хлеб',
+                'category': 'intermediate',
+                'output_quantity': 1,
+                'production_time': 8,
+                'ingredients': {'Пшеница': 4},
+                'base_price': 22,
+                'description': 'Выпекается из муки. Базовый продукт питания.'
             },
             {
-                'name': 'Гигантская фабрика',
-                'category': 'building',
-                'base_price': 5000,
-                'description': 'Огромный промышленный комплекс. Максимальная производительность.'
-            },
-            
-            # Бизнесы (приносят пассивный доход)
-            {
-                'name': 'Маленький магазин',
-                'category': 'building',
-                'base_price': 300,
-                'description': 'Небольшая торговая лавка. Приносит 2 ₽/минуту.'
-            },
-            {
-                'name': 'Ресторан',
-                'category': 'building',
-                'base_price': 800,
-                'description': 'Уютное заведение с вкусной едой. Приносит 5 ₽/минуту.'
-            },
-            {
-                'name': 'Таверна',
-                'category': 'building',
-                'base_price': 600,
-                'description': 'Популярное место отдыха моряков. Приносит 4 ₽/минуту.'
-            },
-            {
-                'name': 'Гостиница',
-                'category': 'building',
-                'base_price': 1200,
-                'description': 'Комфортабельный отель для путешественников. Приносит 8 ₽/минуту.'
-            },
-            {
-                'name': 'Рынок',
-                'category': 'building',
-                'base_price': 1500,
-                'description': 'Центр торговли. Приносит 10 ₽/минуту.'
-            },
-            
-            # Жилые дома (увеличивают население)
-            {
-                'name': 'Маленький дом',
-                'category': 'building',
-                'base_price': 200,
-                'description': 'Небольшой дом для одной семьи. +5 жителей.'
-            },
-            {
-                'name': 'Большой дом',
-                'category': 'building',
-                'base_price': 400,
-                'description': 'Просторный дом для нескольких семей. +10 жителей.'
-            },
-            {
-                'name': 'Особняк',
-                'category': 'building',
-                'base_price': 1000,
-                'description': 'Роскошный особняк для знати. +25 жителей.'
-            },
-            {
-                'name': 'Доходный дом',
-                'category': 'building',
-                'base_price': 600,
-                'description': 'Многоквартирный дом. +15 жителей.'
-            },
-            
-            # Склады (увеличивают вместимость)
-            {
-                'name': 'Маленький склад',
-                'category': 'building',
-                'base_price': 250,
-                'description': 'Небольшое хранилище. +100 ед. вместимости.'
-            },
-            {
-                'name': 'Большой склад',
-                'category': 'building',
-                'base_price': 600,
-                'description': 'Вместительное хранилище. +250 ед. вместимости.'
-            },
-            {
-                'name': 'Портовый склад',
-                'category': 'building',
-                'base_price': 1200,
-                'description': 'Огромный склад в порту. +500 ед. вместимости.'
-            },
-            
-            # Фермы (производят ресурсы)
-            {
-                'name': 'Небольшая ферма',
-                'category': 'building',
-                'base_price': 400,
-                'description': 'Производит 5 ед. продуктов в час.'
-            },
-            {
-                'name': 'Плантация',
-                'category': 'building',
-                'base_price': 900,
-                'description': 'Производит 12 ед. продуктов в час.'
-            },
-            {
-                'name': 'Животноводческая ферма',
-                'category': 'building',
-                'base_price': 700,
-                'description': 'Производит 8 ед. мяса в час.'
-            },
-        ]
-
-        # === РЕСУРСЫ ДЛЯ ОСТРОВА ===
-        resources = [
-            {
-                'name': 'Кофейные зерна',
-                'category': 'resource',
-                'base_price': 10,
-                'description': 'Ароматные зерна для приготовления кофе.'
-            },
-            {
-                'name': 'Какао бобы',
-                'category': 'resource',
+                'name': 'Сахар',
+                'category': 'intermediate',
+                'output_quantity': 1,
+                'production_time': 10,
+                'ingredients': {'Тростник': 2},
                 'base_price': 12,
-                'description': 'Сырье для производства шоколада.'
+                'description': 'Производится из тростника. Используется в кондитерском деле.'
             },
             {
                 'name': 'Табак',
+                'category': 'intermediate',
+                'output_quantity': 1,
+                'production_time': 8,
+                'ingredients': {'Табачные листья': 8},
+                'base_price': 30,
+                'description': 'Обработанные табачные листья. Для производства сигар.'
+            },
+            {
+                'name': 'Ткань',
+                'category': 'intermediate',
+                'output_quantity': 1,
+                'production_time': 8,
+                'ingredients': {'Хлопок': 10},
+                'base_price': 18,
+                'description': 'Производится из хлопка. Необходима для производства одежды.'
+            },
+            
+            # === УПАКОВОЧНЫЙ ТОВАР ===
+            {
+                'name': 'Упаковочный товар',
+                'category': 'intermediate',
+                'output_quantity': 1,
+                'production_time': 5,
+                'ingredients': {'Ткань': 10},
+                'base_price': 10,
+                'description': 'Упаковка для товаров.'
+            },
+            
+            # === ГОТОВАЯ ПРОДУКЦИЯ ===
+            {
+                'name': 'Сигары',
+                'category': 'finished',
+                'output_quantity': 1,
+                'production_time': 10,
+                'ingredients': {'Табак': 16},
+                'base_price': 70,
+                'description': 'Элитная продукция из табака.'
+            },
+            {
+                'name': 'Шоколад',
+                'category': 'finished',
+                'output_quantity': 1,
+                'production_time': 10,
+                'ingredients': {
+                    'Какао-порошок': 10,
+                    'Сахар': 10
+                },
+                'base_price': 60,
+                'description': 'Сладость из какао-порошка и сахара.'
+            },
+            {
+                'name': 'Ром',
+                'category': 'finished',
+                'output_quantity': 1,
+                'production_time': 10,
+                'ingredients': {'Сахар': 16},
+                'base_price': 46,
+                'description': 'Крепкий напиток из тростника. Любим пиратами.'
+            },
+            {
+                'name': 'Бисквит',
+                'category': 'finished',
+                'output_quantity': 1,
+                'production_time': 10,
+                'ingredients': {
+                    'Хлеб': 16,
+                    'Сахар': 16
+                },
+                'base_price': 54,
+                'description': 'Кондитерское изделие из муки, сахара и яиц.'
+            },
+            
+            # === ЭЛИТНАЯ ПРОДУКЦИЯ ===
+            {
+                'name': 'Кофейный ликёр',
+                'category': 'elite',
+                'output_quantity': 1,
+                'production_time': 6,
+                'ingredients': {
+                    'Ром': 18,
+                    'Молотый кофе': 18
+                },
+                'base_price': 94,
+                'description': 'Благородный напиток на основе кофе. Элитный товар.'
+            },
+            {
+                'name': 'Имперский десерт',
+                'category': 'elite',
+                'output_quantity': 1,
+                'production_time': 6,
+                'ingredients': {
+                    'Бисквит': 20,
+                    'Шоколад': 20
+                },
+                'base_price': 130,
+                'description': 'Изысканный десерт для знати. Высочайшее качество.'
+            },
+        ]
+        raw_materials = [
+            {
+                'name': 'Пшеница',
                 'category': 'resource',
-                'base_price': 15,
-                'description': 'Листья табака для производства сигар.'
+                'base_price': 4,
+                'pmax': 4,
+                'pmin': 1,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Основное сырье для производства муки и хлеба.'
             },
             {
                 'name': 'Тростник',
                 'category': 'resource',
-                'base_price': 8,
-                'description': 'Сладкий тростник для производства сахара и рома.'
+                'base_price': 3,
+                'pmax': 3,
+                'pmin': 1,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Сырье для производства сахара и рома.'
             },
             {
-                'name': 'Древесина',
-                'category': 'resource',
-                'base_price': 5,
-                'description': 'Строительный материал из деревьев.'
-            },
-            {
-                'name': 'Камень',
+                'name': 'Кофейные зерна',
                 'category': 'resource',
                 'base_price': 7,
-                'description': 'Прочный материал для строительства.'
+                'pmax': 7,
+                'pmin': 2,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Сырье для производства молотого кофе и кофейного ликера.'
             },
             {
-                'name': 'Железная руда',
+                'name': 'Какао-бобы',
                 'category': 'resource',
-                'base_price': 20,
-                'description': 'Сырье для производства металла.'
+                'base_price':6,
+                'pmax': 6,
+                'pmin': 2,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Сырье для производства какао-порошка и шоколада.'
             },
             {
-                'name': 'Уголь',
+                'name': 'Табачные листья',
                 'category': 'resource',
-                'base_price': 15,
-                'description': 'Топливо для заводов и паровых машин.'
+                'base_price': 8,
+                'pmax': 8,
+                'pmin': 3,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Сырье для производства табака и сигар.'
             },
             {
                 'name': 'Хлопок',
                 'category': 'resource',
-                'base_price': 6,
+                'base_price': 4,
+                'pmax': 4,
+                'pmin': 1,
+                'n_for_drop': 3,
+                't_recovery': 10,
                 'description': 'Сырье для производства ткани.'
             },
         ]
 
-        # === ТОВАРЫ ДЛЯ ВЕЛИКОБРИТАНИИ (с динамической ценой) ===
-        goods = [
+        # === ПОЛУФАБРИКАТЫ ===
+        intermediate_products = [
+            {
+                'name': 'Хлеб',
+                'category': 'goods',
+                'base_price': 22,
+                'pmax': 22,
+                'pmin': 10,
+                'n_for_drop': 4,
+                't_recovery': 8,
+                'description': 'Выпекается из муки. Базовый продукт питания.'
+            },
+            {
+                'name': 'Сахар',
+                'category': 'goods',
+                'base_price': 12,
+                'pmax': 12,
+                'pmin': 5,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Производится из тростника. Используется в кондитерском деле.'
+            },
+            {
+                'name': 'Молотый кофе',
+                'category': 'goods',
+                'base_price': 17,
+                'pmax': 17,
+                'pmin': 8,
+                'n_for_drop': 1,
+                't_recovery': 6,
+                'description': 'Перемолотые кофейные зерна. Основа для напитков.'
+            },
+            {
+                'name': 'Какао-порошок',
+                'category': 'goods',
+                'base_price': 15,
+                'pmax': 15,
+                'pmin': 7,
+                'n_for_drop': 1,
+                't_recovery': 6,
+                'description': 'Перемолотые какао-бобы. Основа для шоколада.'
+            },
+            {
+                'name': 'Табак',
+                'category': 'goods',
+                'base_price': 30,
+                'pmax': 30,
+                'pmin': 15,
+                'n_for_drop': 4,
+                't_recovery': 8,
+                'description': 'Обработанные табачные листья. Для производства сигар.'
+            },
             {
                 'name': 'Ткань',
                 'category': 'goods',
-                'base_price': 20,
-                'pmax': 20,
-                'n_for_drop': 5,
-                't_recovery': 300,
-                'description': 'Качественная ткань для пошива одежды.'
+                'base_price': 18,
+                'pmax': 18,
+                'pmin': 9,
+                'n_for_drop': 4,
+                't_recovery': 8,
+                'description': 'Производится из хлопка. Необходима для производства одежды.'
+            },
+        ]
+
+        # === ГОТОВАЯ ПРОДУКЦИЯ ===
+        finished_products = [
+            {
+                'name': 'Бисквит',
+                'category': 'goods',
+                'base_price': 54,
+                'pmax': 54,
+                'pmin': 25,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Кондитерское изделие из муки, сахара и яиц.'
             },
             {
                 'name': 'Ром',
                 'category': 'goods',
-                'base_price': 15,
-                'pmax': 15,
-                'n_for_drop': 5,
-                't_recovery': 300,
-                'description': 'Крепкий напиток, любимый моряками.'
-            },
-            {
-                'name': 'Инструменты',
-                'category': 'goods',
-                'base_price': 25,
-                'pmax': 25,
-                'n_for_drop': 5,
-                't_recovery': 300,
-                'description': 'Качественные инструменты для работы.'
-            },
-            {
-                'name': 'Оружие',
-                'category': 'goods',
-                'base_price': 30,
-                'pmax': 30,
-                'n_for_drop': 5,
-                't_recovery': 300,
-                'description': 'Надежное оружие для защиты и нападения.'
-            },
-            {
-                'name': 'Предметы роскоши',
-                'category': 'goods',
-                'base_price': 50,
-                'pmax': 50,
+                'base_price': 46,
+                'pmax': 46,
+                'pmin': 20,
                 'n_for_drop': 3,
-                't_recovery': 600,
-                'description': 'Дорогие товары для знати.'
+                't_recovery': 10,
+                'description': 'Крепкий напиток из тростника. Любим пиратами.'
             },
             {
-                'name': 'Пряности',
+                'name': 'Шоколад',
                 'category': 'goods',
-                'base_price': 40,
-                'pmax': 40,
-                'n_for_drop': 4,
-                't_recovery': 450,
-                'description': 'Экзотические специи из колоний.'
+                'base_price': 60,
+                'pmax': 60,
+                'pmin': 30,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Сладость из какао-порошка и сахара.'
+            },
+            {
+                'name': 'Сигары',
+                'category': 'goods',
+                'base_price': 70,
+                'pmax': 70,
+                'pmin': 35,
+                'n_for_drop': 3,
+                't_recovery': 10,
+                'description': 'Элитная продукция из табака.'
+            },
+        ]
+
+        # === ЭЛИТНАЯ ПРОДУКЦИЯ ===
+        elite_products = [
+            {
+                'name': 'Имперский десерт',
+                'category': 'goods',
+                'base_price': 130,
+                'pmax': 130,
+                'pmin': 65,
+                'n_for_drop': 1,
+                't_recovery': 6,
+                'description': 'Изысканный десерт для знати. Высочайшее качество.'
+            },
+            {
+                'name': 'Кофейный ликёр',
+                'category': 'goods',
+                'base_price': 94,
+                'pmax': 94,
+                'pmin': 47,
+                'n_for_drop': 1,
+                't_recovery': 6,
+                'description': 'Благородный напиток на основе кофе. Элитный товар.'
+            },
+        ]
+
+        # === НОВЫЕ ФАБРИКИ ===
+        factories = [
+            {
+                'name': 'Мельница',
+                'category': 'factory',
+                'base_price': 200,
+                'description': 'Перемалывает зерно в муку. Необходима для пекарни.'
+            },
+            {
+                'name': 'Пекарня',
+                'category': 'factory',
+                'base_price': 500,
+                'description': 'Выпекает хлеб из муки. Приносит стабильный доход.'
+            },
+            {
+                'name': 'Сахароварня',
+                'category': 'factory',
+                'base_price': 300,
+                'description': 'Производит сахар из тростника. Сырье для кондитерской.'
+            },
+            {
+                'name': 'Ткацкая фабрика',
+                'category': 'factory',
+                'base_price': 300,
+                'description': 'Производит ткань из хлопка. Основа текстильной промышленности.'
+            },
+            {
+                'name': 'Сушильня',
+                'category': 'factory',
+                'base_price': 750,
+                'description': 'Сушит табачные листья. Подготовка к производству сигар.'
+            },
+            {
+                'name': 'Табачная мануфактура',
+                'category': 'factory',
+                'base_price': 1200,
+                'description': 'Производит сигары высокого качества. Дорогой товар.'
+            },
+            {
+                'name': 'Шоколадная фабрика',
+                'category': 'factory',
+                'base_price': 1000,
+                'description': 'Производит шоколад из какао-бобов. Любимое лакомство.'
+            },
+            {
+                'name': 'Ликероводочный завод',
+                'category': 'factory',
+                'base_price': 1500,
+                'description': 'Производит крепкие напитки. Высокая прибыль.'
+            },
+            {
+                'name': 'Кондитерская',
+                'category': 'factory',
+                'base_price': 2000,
+                'description': 'Производит конфеты и десерты. Элитная продукция.'
+            },
+        ]
+
+        # === БИЗНЕС ===
+        businesses = [
+            {
+                'name': 'Таверна',
+                'category': 'business',
+                'base_price': 450,
+                'description': 'Место отдыха моряков. Приносит стабильный небольшой доход.'
+            },
+            {
+                'name': 'Постоялый двор',
+                'category': 'business',
+                'base_price': 800,
+                'description': 'Гостиница для путешественников. Средний доход.'
+            },
+            {
+                'name': 'Церковь',
+                'category': 'business',
+                'base_price': 2500,
+                'description': 'Духовный центр. Приносит пожертвования и уважение.'
+            },
+             {
+                'name': 'Ратуша',
+                'category': 'business',
+                'base_price': 5000,
+                'description': 'ыыы'
+            },
+
+        ]
+
+
+        # === КИРПИЧИ ===
+        bricks = [
+            {
+                'name': 'Кирпич',
+                'category': 'brick',
+                'base_price': 0,
+                'description': 'Строительный материал. Используется для получения стартового корабля.'
+            },
+            {
+                'name': 'Кирпичи (стопка)',
+                'category': 'brick',
+                'base_price': 0,
+                'description': 'Стопка из 10 кирпичей.'
+            },
+        ]
+
+        # === СТАРТОВЫЕ КОРАБЛИ ===
+        starter_ships = [
+            {
+                'name': 'Люггер (базовый) - стартовый',
+                'category': 'starter_ship',
+                'base_price': 0,
+                'description': 'Стартовый корабль для новых игроков. Без орудий.'
+            },
+            {
+                'name': 'Люггер (с орудиями) - стартовый',
+                'category': 'starter_ship',
+                'base_price': 0,
+                'description': 'Стартовый корабль для новых игроков. С орудиями.'
             },
         ]
 
         # === КОРАБЛИ ===
         ships = [
-            {
+             {
                 'name': 'Шхуна',
                 'category': 'ship',
+                'base_price': 60,
+                'description': 'Самый сильный базовый корабль. Является хорошей опцией на любом этапе игры при своем соотношении цена/качество.'
+            },
+            {
+                'name': 'Барк',
+                'category': 'ship',
                 'base_price': 500,
-                'description': 'Небольшое быстрое судно для торговли.'
+                'description': 'Грузовой корабль первого тира. Хорош для торговли, дешев в постройке. Способен принять бой от шхун и Люггеров.'
+            },
+            {
+                'name': 'Баркентина',
+                'category': 'ship',
+                'base_price': 450,
+                'description': 'В отличие от барка, Баркентина меньше в размерах и имеет большую скорость против ветра, что позволяет уходить от военных кораблей первого тира и Галеона. В обмен на это имеет более низкий объем трюма.'
             },
             {
                 'name': 'Бриг',
                 'category': 'ship',
-                'base_price': 1000,
-                'description': 'Среднее торговое судно.'
+                'base_price': 600,
+                'description': 'Военный корабль первого тира. Позволяет охотиться на Барки и Шхуны, а также уничтожать многие постройки.'
+            },
+            {
+                'name': 'Бригантина',
+                'category': 'ship',
+                'base_price': 500,
+                'description': 'Тот же смысл, что и у баркентины, но вместо объема трюма, снижается кол-во орудий.'
+            },
+            {
+                'name': 'Флейт',
+                'category': 'ship',
+                'base_price': 800,
+                'description': 'Огромный ящик на плаву. Флейт имеет наибольшую вместительность трюма среди всех кораблей, но уязвим к почти любым атакам.'
+            },
+            {
+                'name': 'Клипер',
+                'category': 'ship',
+                'base_price': 850,
+                'description': 'Сбалансированный торговый корабль. Имеет хорошую вместимость, но защищен от всех военных кораблей, кроме корвета.'
+            },
+            {
+                'name': 'Галеон',
+                'category': 'ship',
+                'base_price': 1200,
+                'description': 'Танк морских сражений. Может дать бой почти любому кораблю, но крайне медленный, не в силах навязывать или уходить от боев. Имеет хороший трюм, что добавляет универсальности.'
+            },
+            {
+                'name': 'Корвет',
+                'category': 'ship',
+                'base_price': 900,
+                'description': 'Идеальный корабль пирата или поддержки. Быстрый, хорошо оснащенный. Способен захватить любое торговое судно кроме индиамена, но терпит крах в осаде острова или крупных морских боях.'
+            },
+            {
+                'name': 'Индиамен',
+                'category': 'ship',
+                'base_price': 1300,
+                'description': 'Вершина инженерной мысли торговцев. Индиамен это большой, быстрый и хорошо вооруженный корабль, который способен справиться с любой задачей, будь то перевозка крупных партий грузов, сражение с пиратами или обстрел построек конкурентов.'
             },
             {
                 'name': 'Фрегат',
                 'category': 'ship',
-                'base_price': 2000,
-                'description': 'Боевой корабль с хорошей скоростью.'
+                'base_price': 1500,
+                'description': 'Основа любого флота. Имеет сбалансированные характеристики по части вооружения и скорости и даже неплохой трюм. Ни один корабль не может в одиночку потопить фрегат.'
             },
             {
-                'name': 'Линкор',
+                'name': 'Линейный корабль',
                 'category': 'ship',
-                'base_price': 5000,
-                'description': 'Мощный военный корабль.'
+                'base_price': 2800,
+                'description': 'Плавучая крепость. Линейный корабль имеет астрономически большое количество пушек но крайне посредственную скорость. Основное его назначение — осада фортов, но он способен быть угрозой на море, если снабдить его меньшими судами поддержки.'
             },
             {
-                'name': 'Паровой фрегат',
+                'name': 'Паровой Фрегат',
                 'category': 'ship',
-                'base_price': 8000,
-                'description': 'Современный корабль с паровым двигателем.'
-            },
-            {
-                'name': 'Торговое судно',
-                'category': 'ship',
-                'base_price': 3000,
-                'description': 'Большое грузовое судно.'
-            },
-        ]
-
-        # === ШЕСТЕРНИ (для завода) ===
-        gears = [
-            {
-                'name': 'Шестерня',
-                'category': 'gear',
-                'base_price': 2,
-                'description': 'Деталь для механизмов и заводов.'
-            },
-            {
-                'name': 'Крупная шестерня',
-                'category': 'gear',
-                'base_price': 5,
-                'description': 'Усиленная шестерня для тяжелых механизмов.'
+                'base_price': 2500,
+                'description': 'Тот же фрегат, но с паровым двигателем, дополнительно ускоряющим его в любом направлении, что позволяет догонять и Клипперы, и Индиамены, и даже Корветы.'
             },
         ]
 
         # === ПЛАТЕЖИ И ШТРАФЫ ===
         payments = [
-            {
-                'name': 'Каперский платеж',
-                'category': 'other',
-                'base_price': 50,
-                'description': 'Ежемесячный платеж за каперскую лицензию.'
-            },
-            {
-                'name': 'Штраф за нарушение',
-                'category': 'fine',
-                'base_price': 100,
-                'description': 'Стандартный штраф за нарушение правил.'
-            },
-            {
-                'name': 'Судебная пошлина',
-                'category': 'fine',
-                'base_price': 50,
-                'description': 'Платеж за рассмотрение дела в суде.'
-            },
-            {
-                'name': 'Обработка ресурса',
-                'category': 'processing',
-                'base_price': 5,
-                'description': 'Стоимость обработки единицы ресурса на фабрике.'
-            },
+            # ... (ваши платежи)
         ]
 
         # Объединяем все
-        all_items = buildings + resources + goods + ships + gears + payments
+        all_items = (
+            raw_materials + intermediate_products + finished_products + elite_products +
+            factories + businesses + bricks + starter_ships + ships + payments
+        )
         
         # Создаем записи
         created_count = 0
         updated_count = 0
-        existing_count = 0
-        
-        self.stdout.write(self.style.NOTICE('Начинаем инициализацию прайс-листа...'))
         
         for item in all_items:
             obj, created = PriceList.objects.update_or_create(
@@ -363,9 +575,10 @@ class Command(BaseCommand):
                 defaults={
                     'category': item['category'],
                     'base_price': item['base_price'],
-                    'pmax': item.get('pmax', None),
-                    'n_for_drop': item.get('n_for_drop', None),
-                    't_recovery': item.get('t_recovery', None),
+                    'pmax': item.get('pmax'),
+                    'pmin': item.get('pmin'),
+                    'n_for_drop': item.get('n_for_drop'),
+                    't_recovery': item.get('t_recovery'),
                     'description': item.get('description', ''),
                 }
             )
@@ -374,26 +587,11 @@ class Command(BaseCommand):
                 created_count += 1
                 self.stdout.write(self.style.SUCCESS(f'  ✓ Создано: {item["name"]}'))
             else:
-                # Проверяем, было ли обновление
-                if (obj.category != item['category'] or 
-                    obj.base_price != item['base_price']):
-                    updated_count += 1
-                    self.stdout.write(self.style.WARNING(f'  ↻ Обновлено: {item["name"]}'))
-                else:
-                    existing_count += 1
+                updated_count += 1
+                self.stdout.write(self.style.WARNING(f'  ↻ Обновлено: {item["name"]}'))
         
-        # Выводим статистику
+        # Статистика
         self.stdout.write('\n' + '='*50)
-        self.stdout.write(self.style.SUCCESS(f'Инициализация завершена!'))
-        self.stdout.write(f'  Создано новых записей: {created_count}')
-        self.stdout.write(f'  Обновлено записей: {updated_count}')
-        self.stdout.write(f'  Существовало без изменений: {existing_count}')
-        self.stdout.write(f'  Всего записей в прайс-листе: {PriceList.objects.count()}')
-        
-        # Показываем распределение по категориям
-        self.stdout.write('\n' + '='*50)
-        self.stdout.write(self.style.NOTICE('Распределение по категориям:'))
-        for category_code, category_name in PriceList.CATEGORY_CHOICES:
-            count = PriceList.objects.filter(category=category_code).count()
-            if count > 0:
-                self.stdout.write(f'  {category_name}: {count}')
+        self.stdout.write(self.style.SUCCESS(f'✅ Инициализация завершена!'))
+        self.stdout.write(f'  Создано: {created_count}')
+        self.stdout.write(f'  Обновлено: {updated_count}')

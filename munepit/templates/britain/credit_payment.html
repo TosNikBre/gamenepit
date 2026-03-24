@@ -45,6 +45,41 @@
         font-weight: bold;
         font-family: monospace;
     }
+    .change-box {
+        background: linear-gradient(135deg, #17a2b8, #0dcaf0);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        margin: 20px 0;
+        animation: glow 2s infinite;
+    }
+    @keyframes glow {
+        0% { box-shadow: 0 0 5px rgba(23, 162, 184, 0.5); }
+        50% { box-shadow: 0 0 20px rgba(23, 162, 184, 0.8); }
+        100% { box-shadow: 0 0 5px rgba(23, 162, 184, 0.5); }
+    }
+    .change-amount {
+        font-size: 3rem;
+        font-weight: bold;
+        line-height: 1.2;
+    }
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .info-row:last-child {
+        border-bottom: none;
+    }
+    .info-label {
+        font-weight: 600;
+        color: #6c757d;
+    }
+    .info-value {
+        font-size: 1.1rem;
+    }
 </style>
 {% endblock %}
 
@@ -55,14 +90,14 @@
             <h2><i class="bi bi-cash"></i> Внесение платежа</h2>
             <div>
                 <span class="badge bg-primary badge-custom me-2">
-                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
+                    <i class="bi bi-person"></i> {{ session.username }}
                 </span>
                 <a href="{% url 'britain_credits' %}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-left"></i> К кредитам
+                    <i class="bi bi-arrow-left"></i> Назад
                 </a>
             </div>
         </div>
-        <p class="text-muted">Погашение кредита - досрочное погашение поощряется</p>
+        <p class="text-muted">Погашение кредита - возможна сдача при переплате</p>
     </div>
 
     <div class="row">
@@ -101,7 +136,7 @@
                                             data-monthly="{{ debtor.monthly_payment }}"
                                             data-remaining="{{ debtor.remaining_payments }}"
                                             data-term="{{ debtor.term_months }}"
-                                            data-overdue="{{ debtor.is_overdue|lower }}"
+                                            data-last="{{ debtor.last_payment_at|date:'U' }}"
                                             {% if form.debtor.value|stringformat:"s" == debtor.id|stringformat:"s" %}selected{% endif %}>
                                         Игрок #{{ debtor.player_id }} - {{ debtor.remaining_payments }}/{{ debtor.term_months }} платежей
                                         ({{ debtor.credit_amount }} ₽)
@@ -124,24 +159,22 @@
                                 <div class="row">
                                     <div class="col-md-6">
                                         <h6>Информация о кредите</h6>
-                                        <table class="table table-sm">
-                                            <tr>
-                                                <td>Игрок:</td>
-                                                <td><strong id="infoPlayer">—</strong></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Сумма кредита:</td>
-                                                <td><strong id="infoAmount">0 ₽</strong></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Обязательный платеж:</td>
-                                                <td><strong id="infoMonthly">0 ₽</strong></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Осталось платежей:</td>
-                                                <td><strong id="infoRemaining">0</strong></td>
-                                            </tr>
-                                        </table>
+                                        <div class="info-row">
+                                            <span class="info-label">Игрок:</span>
+                                            <span class="info-value" id="infoPlayer">—</span>
+                                        </div>
+                                        <div class="info-row">
+                                            <span class="info-label">Сумма кредита:</span>
+                                            <span class="info-value" id="infoAmount">0 ₽</span>
+                                        </div>
+                                        <div class="info-row">
+                                            <span class="info-label">Обязательный платеж:</span>
+                                            <span class="info-value" id="infoMonthly">0 ₽</span>
+                                        </div>
+                                        <div class="info-row">
+                                            <span class="info-label">Осталось платежей:</span>
+                                            <span class="info-value" id="infoRemaining">0</span>
+                                        </div>
                                     </div>
                                     <div class="col-md-6">
                                         <h6>Прогресс погашения</h6>
@@ -154,7 +187,7 @@
                                         </div>
                                         <div id="timer" class="text-center" style="display: none;">
                                             <small>Время с последнего платежа:</small>
-                                            <div class="timer-large" id="timerDisplay">00:00:00</div>
+                                            <div class="timer-large" id="timerDisplay">00:00</div>
                                         </div>
                                     </div>
                                 </div>
@@ -183,6 +216,34 @@
                                     </div>
                                 {% endif %}
                             </div>
+                        </div>
+
+                        <!-- Внесено денег -->
+                        <div class="mb-4">
+                            <label for="money_input" class="form-label fw-bold">
+                                Внесено денег <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" 
+                                       id="money_input"
+                                       class="form-control form-control-lg"
+                                       step="0.01"
+                                       min="0"
+                                       placeholder="0.00"
+                                       required>
+                                <span class="input-group-text">₽</span>
+                            </div>
+                            <div class="form-text">Сумма, которую вносит игрок</div>
+                        </div>
+
+                        <!-- Блок сдачи -->
+                        <div class="change-box mb-4" id="changeBlock" style="display: none;">
+                            <i class="bi bi-cash-coin fs-1"></i>
+                            <h4 class="mt-2">Сдача</h4>
+                            <div class="change-amount" id="changeAmount">0.00 ₽</div>
+                            <p class="mb-0 mt-2">
+                                <small>Верните эту сумму игроку</small>
+                            </p>
                         </div>
 
                         <!-- Калькулятор погашения -->
@@ -227,12 +288,10 @@
                         </div>
 
                         <!-- Кнопки -->
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{% url 'britain_credits' %}" class="btn btn-secondary btn-lg me-md-2">
-                                <i class="bi bi-x-circle"></i> Отмена
-                            </a>
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'britain_credits' %}" class="btn btn-secondary btn-lg">Отмена</a>
                             <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
-                                <i class="bi bi-check-circle"></i> Внести платеж
+                                Внести платеж
                             </button>
                         </div>
                     </form>
@@ -245,26 +304,14 @@
             <!-- Правила погашения -->
             <div class="card mb-4">
                 <div class="card-header bg-warning">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Правила погашения</h5>
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Правила</h5>
                 </div>
                 <div class="card-body">
                     <ul class="list-unstyled">
-                        <li class="mb-3">
-                            <i class="bi bi-1-circle-fill text-primary me-2"></i>
-                            <strong>Обязательный платеж:</strong> фиксирован
-                        </li>
-                        <li class="mb-3">
-                            <i class="bi bi-2-circle-fill text-primary me-2"></i>
-                            Если сумма ≥ платеж: списывается 1 платеж
-                        </li>
-                        <li class="mb-3">
-                            <i class="bi bi-3-circle-fill text-primary me-2"></i>
-                            За каждые 0.66 × платеж сверх нормы: +1 месяц
-                        </li>
-                        <li class="mb-3">
-                            <i class="bi bi-4-circle-fill text-primary me-2"></i>
-                            Если остаток = 0: кредит закрыт
-                        </li>
+                        <li class="mb-2">✅ Обязательный платеж фиксирован</li>
+                        <li class="mb-2">✅ При переплате выдается сдача</li>
+                        <li class="mb-2">✅ За переплату начисляются бонусные месяцы</li>
+                        <li class="mb-2">⚠️ Просрочка более 10 минут</li>
                     </ul>
                 </div>
             </div>
@@ -272,22 +319,14 @@
             <!-- Быстрые суммы -->
             <div class="card mb-4">
                 <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-lightning"></i> Быстрые суммы</h5>
+                    <h5 class="mb-0">Быстрые суммы</h5>
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
-                        <button class="btn btn-outline-primary" onclick="setPayment('required')">
-                            Обязательный платеж
-                        </button>
-                        <button class="btn btn-outline-success" onclick="setPayment('double')">
-                            Двойной платеж
-                        </button>
-                        <button class="btn btn-outline-info" onclick="setPayment('triple')">
-                            Тройной платеж
-                        </button>
-                        <button class="btn btn-outline-warning" onclick="setPayment('full')">
-                            Полное погашение
-                        </button>
+                        <button class="btn btn-outline-primary" type="button" onclick="setPayment('required')">Обязательный платеж</button>
+                        <button class="btn btn-outline-success" type="button" onclick="setPayment('double')">Двойной платеж</button>
+                        <button class="btn btn-outline-info" type="button" onclick="setPayment('triple')">Тройной платеж</button>
+                        <button class="btn btn-outline-warning" type="button" onclick="setPayment('full')">Полное погашение</button>
                     </div>
                 </div>
             </div>
@@ -295,10 +334,10 @@
             <!-- Последние платежи -->
             <div class="card">
                 <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние платежи</h5>
+                    <h5 class="mb-0">Последние платежи</h5>
                 </div>
                 <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                    {% for payment in recent_payments|slice:":10" %}
+                    {% for payment in recent_payments %}
                     <div class="border-bottom mb-2 pb-2">
                         <div class="d-flex justify-content-between">
                             <span><strong>#{{ payment.player_id }}</strong></span>
@@ -307,7 +346,7 @@
                         <small class="text-muted">{{ payment.timestamp|date:"d.m.Y H:i" }}</small>
                     </div>
                     {% empty %}
-                    <p class="text-muted text-center mb-0">Нет платежей</p>
+                    <p class="text-muted text-center">Нет платежей</p>
                     {% endfor %}
                 </div>
             </div>
@@ -320,6 +359,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Элементы формы
     const debtorSelect = document.getElementById('{{ form.debtor.id_for_label }}');
     const paymentInput = document.getElementById('{{ form.payment_amount.id_for_label }}');
+    const moneyInput = document.getElementById('money_input');
     const submitBtn = document.getElementById('submitBtn');
     
     // Информационные элементы
@@ -339,27 +379,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const bonusInfo = document.getElementById('bonusInfo');
     const paymentsCovered = document.getElementById('paymentsCovered');
     const remainingAfter = document.getElementById('remainingAfter');
+    
+    // Элементы сдачи
+    const changeBlock = document.getElementById('changeBlock');
+    const changeAmount = document.getElementById('changeAmount');
 
     let currentDebtor = null;
     let timerInterval = null;
 
     // Функция форматирования времени
     function formatTime(seconds) {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
     // Функция обновления таймера
-    function updateTimer(lastPayment) {
-        if (timerInterval) clearInterval(timerInterval);
+    function updateTimer() {
+        if (!currentDebtor) return;
         
-        timerInterval = setInterval(() => {
-            const now = Math.floor(Date.now() / 1000);
-            const diff = now - lastPayment;
-            timerDisplay.textContent = formatTime(diff);
-        }, 1000);
+        const now = Math.floor(Date.now() / 1000);
+        const diff = now - currentDebtor.last;
+        timerDisplay.textContent = formatTime(diff);
+        
+        // Подсветка просрочки
+        if (diff > 600) { // больше 10 минут
+            timerDisplay.style.color = '#dc3545';
+            timerDisplay.style.fontWeight = 'bold';
+        } else {
+            timerDisplay.style.color = '';
+            timerDisplay.style.fontWeight = '';
+        }
     }
 
     // Функция загрузки информации о кредите
@@ -374,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 monthly: parseFloat(selected.dataset.monthly),
                 remaining: parseInt(selected.dataset.remaining),
                 term: parseInt(selected.dataset.term),
-                overdue: selected.dataset.overdue === 'true'
+                last: parseInt(selected.dataset.last)
             };
             
             // Отображаем информацию
@@ -385,25 +435,31 @@ document.addEventListener('DOMContentLoaded', function() {
             infoRemaining.textContent = currentDebtor.remaining + '/' + currentDebtor.term;
             
             // Прогресс
-            const progress = ((currentDebtor.term - currentDebtor.remaining) / currentDebtor.term) * 100;
+            const paidPayments = currentDebtor.term - currentDebtor.remaining;
+            const progress = (paidPayments / currentDebtor.term) * 100;
             paymentProgress.style.width = progress + '%';
             
             // Просрочка
-            if (currentDebtor.overdue) {
+            const now = Math.floor(Date.now() / 1000);
+            const diff = now - currentDebtor.last;
+            if (diff > 600) {
                 overdueWarning.style.display = 'block';
             } else {
                 overdueWarning.style.display = 'none';
             }
             
-            // Таймер (здесь должен быть реальный timestamp)
+            // Таймер
             timer.style.display = 'block';
-            updateTimer(Math.floor(Date.now() / 1000) - 300); // Пример: 5 минут назад
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+            updateTimer();
             
             updateCalculation();
         } else {
             creditInfo.style.display = 'none';
             repaymentCalc.style.display = 'none';
             submitBtn.disabled = true;
+            changeBlock.style.display = 'none';
             if (timerInterval) clearInterval(timerInterval);
         }
     }
@@ -416,12 +472,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let covered = 0;
         let remaining = amount;
         
-        // Обязательный платеж
         if (remaining >= monthly) {
             covered++;
             remaining -= monthly;
             
-            // Дополнительные платежи
             const bonusThreshold = monthly * 0.66;
             while (remaining >= bonusThreshold && covered < currentDebtor.remaining) {
                 covered++;
@@ -429,7 +483,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Не может быть больше оставшихся платежей
         covered = Math.min(covered, currentDebtor.remaining);
         
         return {
@@ -442,6 +495,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция обновления калькулятора
     function updateCalculation() {
         const payment = parseFloat(paymentInput.value) || 0;
+        const money = parseFloat(moneyInput.value) || 0;
         
         if (currentDebtor && payment > 0) {
             repaymentCalc.style.display = 'block';
@@ -457,15 +511,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 paymentsCovered.textContent = result.covered;
                 remainingAfter.textContent = result.newRemaining;
                 
-                // Проверяем достаточно ли средств для обязательного платежа
-                if (payment >= currentDebtor.monthly) {
-                    submitBtn.disabled = false;
+                // Проверка достаточно ли денег
+                if (money >= payment) {
+                    // Денег достаточно - показываем сдачу
+                    const change = money - payment;
+                    changeAmount.textContent = change.toFixed(2) + ' ₽';
+                    changeBlock.style.display = 'block';
+                    
+                    // Проверяем минимальный платеж
+                    if (payment >= currentDebtor.monthly) {
+                        submitBtn.disabled = false;
+                    } else {
+                        submitBtn.disabled = true;
+                        // Можно показать сообщение о минимальном платеже
+                        console.log('Сумма платежа меньше обязательного');
+                    }
                 } else {
+                    // Денег недостаточно - не показываем сдачу и блокируем кнопку
+                    changeBlock.style.display = 'none';
                     submitBtn.disabled = true;
+                    
+                    // Показываем сообщение в консоли (можно добавить элемент на страницу)
+                    console.log(`Недостаточно средств: нужно ${payment.toFixed(2)} ₽, внесено ${money.toFixed(2)} ₽`);
                 }
             }
         } else {
             repaymentCalc.style.display = 'none';
+            changeBlock.style.display = 'none';
             submitBtn.disabled = true;
         }
     }
@@ -494,12 +566,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         paymentInput.value = amount.toFixed(2);
+        moneyInput.value = amount.toFixed(2); // По умолчанию вносим ровно сумму
         updateCalculation();
     };
 
     // События
     debtorSelect.addEventListener('change', loadCreditInfo);
     paymentInput.addEventListener('input', updateCalculation);
+    moneyInput.addEventListener('input', updateCalculation);
 
     // Инициализация
     if (debtorSelect.value) {

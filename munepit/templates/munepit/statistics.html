@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Статистика{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Статистика</h3>
+    <a href="javascript:history.back()" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+  </div>
+  <p>Период: {{ days }} дн. | Всего операций: <strong>{{ total_count }}</strong> | Стол: {{ current_table }}</p>
+  <div class="row">
+    <div class="col-md-6"><div class="card mb-3"><div class="card-body"><h5>По типам</h5>{% for row in actions_stats %}<div>{{ row.action_type }}: {{ row.count }}</div>{% empty %}<div class="text-muted">Нет данных</div>{% endfor %}</div></div></div>
+    <div class="col-md-6"><div class="card mb-3"><div class="card-body"><h5>Топ игроков</h5>{% for row in players_stats %}<div>{{ row.player_id }}: {{ row.count }}</div>{% empty %}<div class="text-muted">Нет данных</div>{% endfor %}</div></div></div>
+  </div>
+</div>
+{% endblock %}

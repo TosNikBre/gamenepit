@@ -8,36 +8,34 @@
         <div class="d-flex justify-content-between align-items-center">
             <h2><i class="bi bi-fire"></i> Покупка угля</h2>
             <div>
-                <span class="badge bg-primary badge-custom me-2">
-                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
-                </span>
-                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                <span class="badge bg-primary me-2">{{ session.username }}</span>
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-secondary">
                     <i class="bi bi-arrow-left"></i> Назад
                 </a>
             </div>
         </div>
-        <p class="text-muted">Угольная биржа Великобритании</p>
+        <p class="text-muted">Приобретение угля для заводов и паровых машин</p>
     </div>
 
-    <div class="row">
-        <!-- Форма покупки -->
-        <div class="col-md-7 mb-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
             <div class="card">
                 <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="bi bi-cart"></i> Оформление покупки угля</h5>
+                    <h5 class="mb-0"><i class="bi bi-cart"></i> Оформление покупки</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" id="coalForm" novalidate>
+                    
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <form method="post" id="coalForm">
                         {% csrf_token %}
                         
-                        {% if form.non_field_errors %}
-                            <div class="alert alert-danger">
-                                {% for error in form.non_field_errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-
                         <!-- Номер игрока -->
                         <div class="mb-4">
                             <label for="{{ form.player_id.id_for_label }}" class="form-label fw-bold">
@@ -55,184 +53,106 @@
                                     {{ form.player_id.errors.0 }}
                                 </div>
                             {% endif %}
-                            <div class="form-text">Номер игрока-покупателя</div>
                         </div>
 
-                        <!-- Сумма сделки -->
+                        <!-- Цена за единицу -->
                         <div class="mb-4">
-                            <label for="{{ form.amount.id_for_label }}" class="form-label fw-bold">
-                                {{ form.amount.label }} <span class="text-danger">*</span>
+                            <label for="price_per_unit" class="form-label fw-bold">
+                                Цена за единицу (тонну) <span class="text-danger">*</span>
                             </label>
                             <div class="input-group">
                                 <input type="number" 
-                                       name="{{ form.amount.name }}"
-                                       id="{{ form.amount.id_for_label }}"
-                                       class="form-control form-control-lg {% if form.amount.errors %}is-invalid{% endif %}"
-                                       value="{{ form.amount.value|default:'' }}"
+                                       name="price_per_unit"
+                                       id="price_per_unit"
+                                       class="form-control form-control-lg"
                                        step="0.01"
                                        min="0.01"
-                                       placeholder="0.00"
+                                       value="{{ price_per_unit|default:'50' }}"
+                                       placeholder="Введите цену за тонну"
                                        required>
                                 <span class="input-group-text">₽</span>
-                                {% if form.amount.errors %}
-                                    <div class="invalid-feedback">
-                                        {{ form.amount.errors.0 }}
-                                    </div>
-                                {% endif %}
                             </div>
-                            <div class="form-text">Сумма, которую игрок платит за уголь</div>
+                            <div class="form-text">Укажите цену за одну тонну угля</div>
                         </div>
 
-                        <!-- Калькулятор угля -->
-                        <div class="card bg-light mb-4">
-                            <div class="card-body">
-                                <h6 class="card-title">Калькулятор угля</h6>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <label class="form-label">Цена за тонну:</label>
-                                        <div class="input-group mb-3">
-                                            <span class="input-group-text">₽</span>
-                                            <input type="number" id="pricePerTon" class="form-control" value="50" readonly>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Количество тонн:</label>
-                                        <div class="input-group mb-3">
-                                            <input type="number" id="coalQuantity" class="form-control" value="0" readonly>
-                                            <span class="input-group-text">т</span>
-                                        </div>
-                                    </div>
+                        <!-- Количество тонн -->
+                        <div class="mb-4">
+                            <label for="{{ form.quantity.id_for_label }}" class="form-label fw-bold">
+                                Количество тонн <span class="text-danger">*</span>
+                            </label>
+                            <input type="number" 
+                                   name="quantity"
+                                   id="{{ form.quantity.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.quantity.errors %}is-invalid{% endif %}"
+                                   value="{{ form.quantity.value|default:'1' }}"
+                                   min="1"
+                                   max="10000"
+                                   step="1"
+                                   required>
+                            {% if form.quantity.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.quantity.errors.0 }}
                                 </div>
-                                <div class="alert alert-info text-center">
-                                    <strong id="calculatedTons">0</strong> тонн угля можно купить на сумму <strong id="calculatedAmount">0</strong> ₽
-                                </div>
+                            {% endif %}
+                            <div class="form-text">Максимум: 10000 тонн за раз</div>
+                        </div>
+
+                        <!-- ИТОГОВАЯ СУММА -->
+                        <div class="card bg-info text-white mb-4">
+                            <div class="card-body text-center">
+                                <h5 class="mb-2">ИТОГО К ОПЛАТЕ</h5>
+                                <h2 class="mb-0" id="totalAmount">0.00 ₽</h2>
                             </div>
                         </div>
 
                         <!-- Внесено денег -->
                         <div class="mb-4">
-                            <label for="{{ form.money_input.id_for_label }}" class="form-label fw-bold">
-                                {{ form.money_input.label }} <span class="text-danger">*</span>
+                            <label for="money_input" class="form-label fw-bold">
+                                Внесено денег <span class="text-danger">*</span>
                             </label>
                             <div class="input-group">
                                 <input type="number" 
-                                       name="{{ form.money_input.name }}"
-                                       id="{{ form.money_input.id_for_label }}"
-                                       class="form-control form-control-lg {% if form.money_input.errors %}is-invalid{% endif %}"
-                                       value="{{ form.money_input.value|default:'' }}"
+                                       id="money_input"
+                                       class="form-control form-control-lg"
                                        step="0.01"
                                        min="0"
                                        placeholder="0.00"
                                        required>
                                 <span class="input-group-text">₽</span>
-                                {% if form.money_input.errors %}
-                                    <div class="invalid-feedback">
-                                        {{ form.money_input.errors.0 }}
-                                    </div>
-                                {% endif %}
                             </div>
+                            <div class="form-text">Сумма, которую вносит игрок</div>
                         </div>
 
                         <!-- Блок сдачи -->
                         <div class="card bg-success text-white mb-4" id="changeBlock" style="display: none;">
-                            <div class="card-body">
-                                <h5 class="mb-0">Сдача: <span id="changeAmount">0.00</span> ₽</h5>
+                            <div class="card-body text-center">
+                                <i class="bi bi-cash-coin fs-1"></i>
+                                <h4 class="mt-2">Сдача</h4>
+                                <h2 class="mb-0" id="changeAmount">0.00 ₽</h2>
+                                <p class="mb-0 mt-2">
+                                    <small>Верните эту сумму игроку</small>
+                                </p>
                             </div>
                         </div>
 
-                        <!-- Блок ошибки -->
-                        <div class="alert alert-danger mb-4" id="errorBlock" style="display: none;">
-                            <i class="bi bi-exclamation-triangle"></i> 
-                            Недостаточно средств! Требуется: <span id="requiredAmount">0.00</span> ₽
+                        <!-- Блок ошибки (недостаточно средств) -->
+                        <div class="card bg-danger text-white mb-4" id="errorBlock" style="display: none;">
+                            <div class="card-body text-center">
+                                <i class="bi bi-exclamation-triangle fs-1"></i>
+                                <h4 class="mt-2">Недостаточно средств</h4>
+                                <h2 class="mb-0" id="shortageAmount">0.00 ₽</h2>
+                                <p class="mb-0 mt-2">
+                                    <small>Требуется еще денег</small>
+                                </p>
+                            </div>
                         </div>
 
                         <!-- Кнопки -->
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{% url 'britain_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
-                                <i class="bi bi-x-circle"></i> Отмена
-                            </a>
-                            <button type="submit" class="btn btn-dark btn-lg" id="submitBtn" disabled>
-                                <i class="bi bi-check-circle"></i> Подтвердить покупку
-                            </button>
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'britain_dashboard' %}" class="btn btn-secondary btn-lg">Отмена</a>
+                            <button type="submit" class="btn btn-dark btn-lg" id="submitBtn" disabled>Подтвердить покупку</button>
                         </div>
                     </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Информационная панель -->
-        <div class="col-md-5 mb-4">
-            <!-- Текущие цены -->
-            <div class="card mb-4">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Текущие цены</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-hover">
-                        <tr>
-                            <td>Уголь (за тонну):</td>
-                            <td><span class="badge bg-primary fs-6">50 ₽</span></td>
-                        </tr>
-                        <tr>
-                            <td>Минимальная партия:</td>
-                            <td><span class="badge bg-secondary">1 тонна</span></td>
-                        </tr>
-                        <tr>
-                            <td>Максимальная партия:</td>
-                            <td><span class="badge bg-secondary">1000 тонн</span></td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Информация об угле -->
-            <div class="card mb-4">
-                <div class="card-header bg-warning">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> О покупке угля</h5>
-                </div>
-                <div class="card-body">
-                    <ul class="list-unstyled">
-                        <li class="mb-2">
-                            <i class="bi bi-check-circle-fill text-success me-2"></i>
-                            Уголь используется для заводов и паровых машин
-                        </li>
-                        <li class="mb-2">
-                            <i class="bi bi-check-circle-fill text-success me-2"></i>
-                            Цена фиксирована: 50 ₽ за тонну
-                        </li>
-                        <li class="mb-2">
-                            <i class="bi bi-check-circle-fill text-success me-2"></i>
-                            Покупка без ограничений
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Последние покупки -->
-            <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние покупки</h5>
-                </div>
-                <div class="card-body">
-                    <div class="list-group">
-                        {% for purchase in recent_coal_purchases|slice:":5" %}
-                        <div class="list-group-item">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <strong>#{{ purchase.player_id }}</strong>
-                                </div>
-                                <div>
-                                    {{ purchase.amount }} ₽
-                                    <small class="text-muted">{{ purchase.timestamp|time:"H:i" }}</small>
-                                </div>
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="text-center text-muted py-3">
-                            Нет покупок за последнее время
-                        </div>
-                        {% endfor %}
-                    </div>
                 </div>
             </div>
         </div>
@@ -242,66 +162,67 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Элементы формы
-    const amountInput = document.getElementById('{{ form.amount.id_for_label }}');
-    const moneyInput = document.getElementById('{{ form.money_input.id_for_label }}');
+    const priceInput = document.getElementById('price_per_unit');
+    const quantityInput = document.getElementById('{{ form.quantity.id_for_label }}');
+    const moneyInput = document.getElementById('money_input');
+    const totalSpan = document.getElementById('totalAmount');
     const submitBtn = document.getElementById('submitBtn');
     const changeBlock = document.getElementById('changeBlock');
-    const changeAmount = document.getElementById('changeAmount');
     const errorBlock = document.getElementById('errorBlock');
-    const requiredAmount = document.getElementById('requiredAmount');
-    
-    // Элементы калькулятора
-    const coalQuantity = document.getElementById('coalQuantity');
-    const calculatedTons = document.getElementById('calculatedTons');
-    const calculatedAmount = document.getElementById('calculatedAmount');
-    const PRICE_PER_TON = 50;
-    
-    // Функция обновления калькулятора
-    function updateCalculator() {
-        const amount = parseFloat(amountInput.value) || 0;
-        const tons = Math.floor(amount / PRICE_PER_TON);
-        
-        coalQuantity.value = tons;
-        calculatedTons.textContent = tons;
-        calculatedAmount.textContent = (tons * PRICE_PER_TON).toFixed(2);
-    }
-    
-    // Функция проверки достаточности средств
-    function checkFunds() {
-        const amount = parseFloat(amountInput.value) || 0;
+    const changeAmount = document.getElementById('changeAmount');
+    const shortageAmount = document.getElementById('shortageAmount');
+
+    // Функция обновления суммы и проверки
+    function updateTotal() {
+        const price = parseFloat(priceInput.value) || 0;
+        const quantity = parseInt(quantityInput.value) || 0;
         const money = parseFloat(moneyInput.value) || 0;
+        const total = price * quantity;
         
-        if (amount > 0 && money > 0) {
-            if (money >= amount) {
-                const change = money - amount;
-                changeAmount.textContent = change.toFixed(2);
+        totalSpan.textContent = total.toFixed(2) + ' ₽';
+        
+        // Скрываем оба блока по умолчанию
+        changeBlock.style.display = 'none';
+        errorBlock.style.display = 'none';
+        
+        if (price > 0 && quantity > 0 && money > 0) {
+            if (money >= total) {
+                // Денег достаточно - показываем сдачу
+                const change = money - total;
+                changeAmount.textContent = change.toFixed(2) + ' ₽';
                 changeBlock.style.display = 'block';
-                errorBlock.style.display = 'none';
                 submitBtn.disabled = false;
             } else {
-                changeBlock.style.display = 'none';
+                // Денег недостаточно - показываем ошибку
+                const shortage = total - money;
+                shortageAmount.textContent = shortage.toFixed(2) + ' ₽';
                 errorBlock.style.display = 'block';
-                requiredAmount.textContent = amount.toFixed(2);
                 submitBtn.disabled = true;
             }
         } else {
             submitBtn.disabled = true;
-            changeBlock.style.display = 'none';
-            errorBlock.style.display = 'none';
         }
     }
-    
+
     // События
-    amountInput.addEventListener('input', function() {
-        updateCalculator();
-        checkFunds();
-    });
-    
-    moneyInput.addEventListener('input', checkFunds);
-    
+    priceInput.addEventListener('input', updateTotal);
+    quantityInput.addEventListener('input', updateTotal);
+    moneyInput.addEventListener('input', updateTotal);
+
     // Инициализация
-    updateCalculator();
-    checkFunds();
+    updateTotal();
 });
 </script>
+
+<style>
+/* Дополнительные стили для блоков */
+.card.bg-success, .card.bg-danger {
+    transition: all 0.3s ease;
+    animation: fadeIn 0.5s;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
 {% endblock %}

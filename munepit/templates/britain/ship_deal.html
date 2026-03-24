@@ -4,10 +4,25 @@
 
 {% block extra_css %}
 <style>
-    .ship-card {
-        cursor: pointer;
+    .deal-type-btn {
         transition: all 0.3s;
+        cursor: pointer;
+        border: 2px solid #dee2e6;
+    }
+    .deal-type-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    .deal-type-btn.active {
+        border-color: #007bff;
+        background-color: #007bff;
+        color: white;
+    }
+    .ship-card {
+        transition: all 0.3s;
+        cursor: pointer;
         border: 2px solid transparent;
+        height: 100%;
     }
     .ship-card:hover {
         transform: translateY(-5px);
@@ -17,18 +32,15 @@
         border-color: #007bff;
         background-color: #f0f7ff;
     }
-    .ship-icon {
-        font-size: 48px;
-        margin-bottom: 10px;
+    .price-tag {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #28a745;
     }
-    .deal-type-btn {
-        padding: 15px;
-        font-size: 1.2rem;
-        transition: all 0.3s;
-    }
-    .deal-type-btn.active {
-        transform: scale(1.02);
-        box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+    .total-price {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #007bff;
     }
 </style>
 {% endblock %}
@@ -39,10 +51,8 @@
         <div class="d-flex justify-content-between align-items-center">
             <h2><i class="bi bi-ship"></i> Сделка с кораблем</h2>
             <div>
-                <span class="badge bg-primary badge-custom me-2">
-                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
-                </span>
-                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                <span class="badge bg-primary me-2">{{ session.username }}</span>
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-secondary">
                     <i class="bi bi-arrow-left"></i> Назад
                 </a>
             </div>
@@ -50,82 +60,63 @@
         <p class="text-muted">Верфь Великобритании - покупка и продажа кораблей</p>
     </div>
 
+    <!-- Отображение сообщений -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
     <div class="row">
-        <!-- Форма сделки -->
         <div class="col-md-8 mb-4">
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="bi bi-cart"></i> Оформление сделки</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" id="shipDealForm" novalidate>
+                    <form method="post" id="shipDealForm">
                         {% csrf_token %}
                         
-                        {% if form.non_field_errors %}
-                            <div class="alert alert-danger">
-                                {% for error in form.non_field_errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-
-                        <!-- Выбор корабля (визуальные карточки) -->
+                        <!-- Выбор корабля -->
                         <div class="mb-4">
-                            <label class="form-label fw-bold">Выберите корабль <span class="text-danger">*</span></label>
-                            <div class="row" id="shipCards">
-                                {% for value, label in form.fields.ship.choices %}
-                                <div class="col-md-4 mb-3">
-                                    <div class="card ship-card" data-ship="{{ value }}" onclick="selectShip('{{ value }}')">
-                                        <div class="card-body text-center">
-                                            <div class="ship-icon">
-                                                {% if value == 'schooner' %}⛵
-                                                {% elif value == 'brig' %}⚓
-                                                {% elif value == 'frigate' %}🚢
-                                                {% elif value == 'battleship' %}⚔️
-                                                {% elif value == 'steam_frigate' %}🔥
-                                                {% endif %}
-                                            </div>
-                                            <h6>{{ label }}</h6>
-                                            <span class="badge bg-primary" id="price-{{ value }}">
-                                                {% if value == 'schooner' %}500
-                                                {% elif value == 'brig' %}1000
-                                                {% elif value == 'frigate' %}2000
-                                                {% elif value == 'battleship' %}5000
-                                                {% elif value == 'steam_frigate' %}8000
-                                                {% endif %} ₽
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            <input type="hidden" name="{{ form.ship.name }}" id="{{ form.ship.id_for_label }}" value="{{ form.ship.value|default:'' }}">
+                            <label for="{{ form.ship.id_for_label }}" class="form-label fw-bold">
+                                {{ form.ship.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.ship }}
+                            {% if form.ship.errors %}
+                                <div class="text-danger mt-1">{{ form.ship.errors.0 }}</div>
+                            {% endif %}
                         </div>
 
-                        <!-- Тип сделки -->
+                        <!-- Тип сделки - визуальные кнопки -->
                         <div class="mb-4">
-                            <label class="form-label fw-bold">{{ form.deal_type.label }} <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold">Тип сделки <span class="text-danger">*</span></label>
                             <div class="row">
-                                {% for radio in form.deal_type %}
-                                <div class="col-md-6">
-                                    <div class="card deal-type-btn {% if radio.data.value == 'buy' %}active{% endif %}" 
-                                         onclick="selectDealType('{{ radio.data.value }}')">
-                                        <div class="card-body text-center">
-                                            {{ radio.tag }}
-                                            <label for="{{ radio.id_for_label }}" class="w-100">
-                                                {% if radio.data.value == 'buy' %}
-                                                    <i class="bi bi-cart-plus fs-3"></i><br>
-                                                    Покупка
-                                                {% else %}
-                                                    <i class="bi bi-cart-dash fs-3"></i><br>
-                                                    Продажа
-                                                {% endif %}
-                                            </label>
+                                <div class="col-md-6 mb-2">
+                                    <div class="card deal-type-btn text-center p-3 {% if form.deal_type.value == 'buy' or not form.deal_type.value %}active{% endif %}" 
+                                         id="buyTypeBtn"
+                                         onclick="setDealType('buy')">
+                                        <div class="card-body p-2">
+                                            <i class="bi bi-cart-plus fs-3"></i>
+                                            <h6 class="mb-0">Покупка</h6>
                                         </div>
                                     </div>
                                 </div>
-                                {% endfor %}
+                                <div class="col-md-6 mb-2">
+                                    <div class="card deal-type-btn text-center p-3 {% if form.deal_type.value == 'sell' %}active{% endif %}" 
+                                         id="sellTypeBtn"
+                                         onclick="setDealType('sell')">
+                                        <div class="card-body p-2">
+                                            <i class="bi bi-cart-dash fs-3"></i>
+                                            <h6 class="mb-0">Продажа</h6>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+                            <input type="hidden" name="deal_type" id="dealTypeInput" value="{{ form.deal_type.value|default:'buy' }}">
                         </div>
 
                         <!-- Номер игрока -->
@@ -133,35 +124,27 @@
                             <label for="{{ form.player_id.id_for_label }}" class="form-label fw-bold">
                                 {{ form.player_id.label }} <span class="text-danger">*</span>
                             </label>
-                            <input type="text" 
-                                   name="{{ form.player_id.name }}"
-                                   id="{{ form.player_id.id_for_label }}"
-                                   class="form-control form-control-lg {% if form.player_id.errors %}is-invalid{% endif %}"
-                                   value="{{ form.player_id.value|default:'' }}"
-                                   placeholder="Введите номер игрока"
-                                   required>
+                            {{ form.player_id }}
                             {% if form.player_id.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.player_id.errors.0 }}
-                                </div>
+                                <div class="text-danger mt-1">{{ form.player_id.errors.0 }}</div>
                             {% endif %}
                         </div>
 
-                        <!-- Сумма сделки -->
+                        <!-- Информация о цене -->
                         <div class="card bg-light mb-4">
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <h6>Цена корабля:</h6>
-                                        <span class="display-6" id="shipPrice">0</span> ₽
+                                        <h6>Базовая цена:</h6>
+                                        <h3 id="basePrice">0 ₽</h3>
                                     </div>
                                     <div class="col-md-6">
-                                        <h6>Итого к оплате:</h6>
-                                        <span class="display-6 text-primary" id="totalPrice">0</span> ₽
+                                        <h6>Итого:</h6>
+                                        <h3 id="totalPrice" class="text-primary">0 ₽</h3>
                                     </div>
                                 </div>
                                 <div id="sellInfo" class="alert alert-info mt-3" style="display: none;">
-                                    <i class="bi bi-info-circle"></i> При продаже корабля выплачивается 50% от стоимости
+                                    <i class="bi bi-info-circle"></i> При продаже корабля игрок получает 50% от стоимости
                                 </div>
                             </div>
                         </div>
@@ -171,44 +154,27 @@
                             <label for="{{ form.money_input.id_for_label }}" class="form-label fw-bold">
                                 {{ form.money_input.label }}
                             </label>
-                            <div class="input-group">
-                                <input type="number" 
-                                       name="{{ form.money_input.name }}"
-                                       id="{{ form.money_input.id_for_label }}"
-                                       class="form-control form-control-lg {% if form.money_input.errors %}is-invalid{% endif %}"
-                                       value="{{ form.money_input.value|default:'' }}"
-                                       step="0.01"
-                                       min="0"
-                                       placeholder="0.00">
-                                <span class="input-group-text">₽</span>
-                                {% if form.money_input.errors %}
-                                    <div class="invalid-feedback">
-                                        {{ form.money_input.errors.0 }}
-                                    </div>
-                                {% endif %}
-                            </div>
+                            {{ form.money_input }}
+                            {% if form.money_input.errors %}
+                                <div class="text-danger mt-1">{{ form.money_input.errors.0 }}</div>
+                            {% endif %}
                         </div>
 
-                        <!-- Блок сдачи (для покупки) -->
-                        <div class="card bg-success text-white mb-4" id="changeBlock" style="display: none;">
-                            <div class="card-body">
-                                <h5 class="mb-0">Сдача: <span id="changeAmount">0.00</span> ₽</h5>
-                            </div>
+                        <!-- Блок сдачи -->
+                        <div class="alert alert-success" id="changeBlock" style="display: none;">
+                            <strong>Сдача:</strong> <span id="changeAmount">0.00</span> ₽
                         </div>
 
-                        <!-- Блок ошибки (для покупки) -->
-                        <div class="alert alert-danger mb-4" id="errorBlock" style="display: none;">
-                            <i class="bi bi-exclamation-triangle"></i> 
-                            Недостаточно средств! Требуется: <span id="requiredAmount">0.00</span> ₽
+                        <!-- Блок ошибки -->
+                        <div class="alert alert-danger" id="errorBlock" style="display: none;">
+                            <strong>Недостаточно средств!</strong> Требуется: <span id="requiredAmount">0.00</span> ₽
                         </div>
 
                         <!-- Кнопки -->
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{% url 'britain_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
-                                <i class="bi bi-x-circle"></i> Отмена
-                            </a>
-                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
-                                <i class="bi bi-check-circle"></i> Подтвердить сделку
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'britain_dashboard' %}" class="btn btn-secondary btn-lg">Отмена</a>
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                                Подтвердить сделку
                             </button>
                         </div>
                     </form>
@@ -216,89 +182,50 @@
             </div>
         </div>
 
-        <!-- Информационная панель -->
-        <div class="col-md-4 mb-4">
-            <!-- Характеристики кораблей -->
+        <div class="col-md-4">
+            <!-- Список кораблей -->
             <div class="card mb-4">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Характеристики</h5>
+                    <h5 class="mb-0">Доступные корабли</h5>
                 </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Корабль</th>
-                                    <th>Скорость</th>
-                                    <th>Вместимость</th>
-                                    <th>Пушки</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Шхуна</td>
-                                    <td>12 узлов</td>
-                                    <td>100 т</td>
-                                    <td>8</td>
-                                </tr>
-                                <tr>
-                                    <td>Бриг</td>
-                                    <td>10 узлов</td>
-                                    <td>200 т</td>
-                                    <td>16</td>
-                                </tr>
-                                <tr>
-                                    <td>Фрегат</td>
-                                    <td>11 узлов</td>
-                                    <td>300 т</td>
-                                    <td>32</td>
-                                </tr>
-                                <tr>
-                                    <td>Линкор</td>
-                                    <td>8 узлов</td>
-                                    <td>500 т</td>
-                                    <td>64</td>
-                                </tr>
-                                <tr>
-                                    <td>Паровой фрегат</td>
-                                    <td>14 узлов</td>
-                                    <td>400 т</td>
-                                    <td>40</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    {% for ship in ships %}
+                    <div class="border-bottom mb-2 pb-2">
+                        <strong>{{ ship.name }}</strong>
+                        <span class="badge bg-primary float-end">{{ ship.price }} ₽</span>
+                        <br>
+                        <small class="text-muted">{{ ship.description|truncatechars:50 }}</small>
                     </div>
+                    {% empty %}
+                    <p class="text-muted text-center">Нет кораблей</p>
+                    {% endfor %}
                 </div>
             </div>
 
             <!-- Последние сделки -->
             <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние сделки</h5>
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Последние сделки</h5>
                 </div>
-                <div class="card-body">
-                    <div class="list-group">
-                        {% for deal in recent_ship_deals|slice:":5" %}
-                        <div class="list-group-item">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <strong>{{ deal.ship }}</strong>
-                                    <span class="badge {% if deal.type == 'buy' %}bg-success{% else %}bg-warning{% endif %}">
-                                        {{ deal.type }}
-                                    </span>
-                                </div>
-                                <div>
-                                    {{ deal.amount }} ₽
-                                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    {% for deal in recent_deals %}
+                    <div class="border-bottom mb-2 pb-2">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>{{ deal.ship }}</strong>
+                                <span class="badge {% if deal.type == 'покупка' %}bg-success{% else %}bg-warning{% endif %}">
+                                    {{ deal.type }}
+                                </span>
                             </div>
-                            <small class="text-muted">Игрок #{{ deal.player_id }} • {{ deal.timestamp|time:"H:i" }}</small>
+                            <span class="badge bg-primary">{{ deal.amount }} ₽</span>
                         </div>
-                        {% empty %}
-                        <div class="text-center text-muted py-3">
-                            Нет сделок
-                        </div>
-                        {% endfor %}
+                        <small class="text-muted">
+                            Игрок #{{ deal.player_id }} • {{ deal.timestamp|date:"H:i d.m" }}
+                        </small>
                     </div>
+                    {% empty %}
+                    <p class="text-muted text-center">Нет сделок</p>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -307,12 +234,10 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Элементы формы
-    const shipInput = document.getElementById('{{ form.ship.id_for_label }}');
-    const dealTypeRadios = document.querySelectorAll('input[name="{{ form.deal_type.name }}"]');
+    const shipSelect = document.getElementById('{{ form.ship.id_for_label }}');
     const moneyInput = document.getElementById('{{ form.money_input.id_for_label }}');
     const submitBtn = document.getElementById('submitBtn');
-    const shipPriceSpan = document.getElementById('shipPrice');
+    const basePriceSpan = document.getElementById('basePrice');
     const totalPriceSpan = document.getElementById('totalPrice');
     const changeBlock = document.getElementById('changeBlock');
     const changeAmount = document.getElementById('changeAmount');
@@ -320,141 +245,82 @@ document.addEventListener('DOMContentLoaded', function() {
     const requiredAmount = document.getElementById('requiredAmount');
     const moneyInputBlock = document.getElementById('moneyInputBlock');
     const sellInfo = document.getElementById('sellInfo');
-    
-    // Цены кораблей
-    const shipPrices = {
-        'schooner': 500,
-        'brig': 1000,
-        'frigate': 2000,
-        'battleship': 5000,
-        'steam_frigate': 8000
-    };
-    
-    // Выбор корабля
-    window.selectShip = function(ship) {
-        // Убираем выделение со всех карточек
-        document.querySelectorAll('.ship-card').forEach(card => {
-            card.classList.remove('selected');
-        });
+    const dealTypeInput = document.getElementById('dealTypeInput');
+    const buyTypeBtn = document.getElementById('buyTypeBtn');
+    const sellTypeBtn = document.getElementById('sellTypeBtn');
+
+    // Данные о кораблях
+    const ships = {};
+    {% for ship in ships %}
+        ships[{{ ship.id }}] = {
+            name: '{{ ship.name|escapejs }}',
+            price: {{ ship.price }}
+        };
+    {% endfor %}
+
+    // Функция установки типа сделки
+    window.setDealType = function(type) {
+        dealTypeInput.value = type;
         
-        // Выделяем выбранную карточку
-        document.querySelector(`[data-ship="${ship}"]`).classList.add('selected');
-        
-        // Устанавливаем значение в скрытое поле
-        shipInput.value = ship;
-        
-        // Обновляем цену
-        updatePrice();
-    };
-    
-    // Выбор типа сделки
-    window.selectDealType = function(type) {
-        // Находим соответствующий радио-элемент и отмечаем его
-        const radio = document.querySelector(`input[name="{{ form.deal_type.name }}"][value="${type}"]`);
-        if (radio) {
-            radio.checked = true;
-        }
-        
-        // Обновляем внешний вид кнопок
-        document.querySelectorAll('.deal-type-btn').forEach((btn, index) => {
-            if ((type === 'buy' && index === 0) || (type === 'sell' && index === 1)) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-        
-        // Обновляем интерфейс в зависимости от типа сделки
-        updateDealTypeUI();
-        updatePrice();
-    };
-    
-    // Обновление интерфейса в зависимости от типа сделки
-    function updateDealTypeUI() {
-        const isBuy = document.querySelector('input[name="{{ form.deal_type.name }}"]:checked')?.value === 'buy';
-        
-        if (isBuy) {
+        // Подсветка кнопок
+        if (type === 'buy') {
+            buyTypeBtn.classList.add('active');
+            sellTypeBtn.classList.remove('active');
             moneyInputBlock.style.display = 'block';
-            moneyInput.required = true;
             sellInfo.style.display = 'none';
-            checkFunds();
         } else {
+            buyTypeBtn.classList.remove('active');
+            sellTypeBtn.classList.add('active');
             moneyInputBlock.style.display = 'none';
-            moneyInput.required = false;
             sellInfo.style.display = 'block';
-            changeBlock.style.display = 'none';
-            errorBlock.style.display = 'none';
-            submitBtn.disabled = false;
         }
-    }
-    
-    // Обновление цены
+        
+        updatePrice();
+    };
+
     function updatePrice() {
-        const ship = shipInput.value;
-        const isBuy = document.querySelector('input[name="{{ form.deal_type.name }}"]:checked')?.value === 'buy';
+        const selectedId = shipSelect.value;
+        const dealType = dealTypeInput.value;
         
-        if (ship && shipPrices[ship]) {
-            const basePrice = shipPrices[ship];
-            const finalPrice = isBuy ? basePrice : basePrice * 0.5;
+        if (selectedId && ships[selectedId]) {
+            const basePrice = ships[selectedId].price;
+            const finalPrice = dealType === 'buy' ? basePrice : basePrice * 0.5;
             
-            shipPriceSpan.textContent = basePrice;
-            totalPriceSpan.textContent = finalPrice.toFixed(2);
+            basePriceSpan.textContent = basePrice.toFixed(2) + ' ₽';
+            totalPriceSpan.textContent = finalPrice.toFixed(2) + ' ₽';
             
-            if (!isBuy) {
-                // Для продажи сразу активируем кнопку
-                submitBtn.disabled = false;
-            }
-        } else {
-            shipPriceSpan.textContent = '0';
-            totalPriceSpan.textContent = '0';
-        }
-    }
-    
-    // Проверка достаточности средств (для покупки)
-    function checkFunds() {
-        const ship = shipInput.value;
-        const money = parseFloat(moneyInput.value) || 0;
-        
-        if (ship && shipPrices[ship]) {
-            const total = shipPrices[ship];
-            
-            if (money >= total) {
-                const change = money - total;
-                changeAmount.textContent = change.toFixed(2);
-                changeBlock.style.display = 'block';
+            if (dealType === 'buy') {
+                const money = parseFloat(moneyInput.value) || 0;
+                
+                if (money >= finalPrice) {
+                    const change = money - finalPrice;
+                    changeAmount.textContent = change.toFixed(2) + ' ₽';
+                    changeBlock.style.display = 'block';
+                    errorBlock.style.display = 'none';
+                    submitBtn.disabled = false;
+                } else {
+                    changeBlock.style.display = 'none';
+                    errorBlock.style.display = 'block';
+                    requiredAmount.textContent = finalPrice.toFixed(2) + ' ₽';
+                    submitBtn.disabled = true;
+                }
+            } else {
+                // Для продажи кнопка всегда активна
+                changeBlock.style.display = 'none';
                 errorBlock.style.display = 'none';
                 submitBtn.disabled = false;
-            } else {
-                changeBlock.style.display = 'none';
-                errorBlock.style.display = 'block';
-                requiredAmount.textContent = total.toFixed(2);
-                submitBtn.disabled = true;
             }
+        } else {
+            submitBtn.disabled = true;
         }
     }
-    
-    // События
-    if (moneyInput) {
-        moneyInput.addEventListener('input', function() {
-            if (document.querySelector('input[name="{{ form.deal_type.name }}"]:checked')?.value === 'buy') {
-                checkFunds();
-            }
-        });
-    }
-    
+
+    shipSelect.addEventListener('change', updatePrice);
+    moneyInput.addEventListener('input', updatePrice);
+
     // Инициализация
-    if (shipInput.value) {
-        selectShip(shipInput.value);
-    }
-    
-    // Проверяем выбран ли тип сделки
-    const selectedDealType = document.querySelector('input[name="{{ form.deal_type.name }}"]:checked');
-    if (selectedDealType) {
-        selectDealType(selectedDealType.value);
-    } else {
-        // По умолчанию выбираем покупку
-        selectDealType('buy');
-    }
+    const initialDealType = '{{ form.deal_type.value|default:"buy" }}';
+    setDealType(initialDealType);
 });
 </script>
 {% endblock %}

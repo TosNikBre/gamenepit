@@ -155,6 +155,7 @@
                                             data-cost="{{ building.cost }}"
                                             data-income="{{ building.income_per_minute }}"
                                             data-last="{{ building.last_profit_collected|date:'U' }}"
+                                            data-built="{{ building.built_at|date:'U' }}"
                                             {% if form.building.value|stringformat:"s" == building.id|stringformat:"s" %}selected{% endif %}>
                                         #{{ building.owner_id }} - {{ building.building_name }} 
                                         ({{ building.get_building_type_display }}) - {{ building.cost }} ₽
@@ -288,60 +289,6 @@
 
         <!-- Информационная панель -->
         <div class="col-md-5 mb-4">
-            <!-- Статистика сносов -->
-            <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Статистика сносов</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-6 text-center mb-3">
-                            <h3>{{ total_demolitions|default:'0' }}</h3>
-                            <small class="text-muted">Всего сносов</small>
-                        </div>
-                        <div class="col-6 text-center mb-3">
-                            <h3>{{ demolitions_today|default:'0' }}</h3>
-                            <small class="text-muted">За сегодня</small>
-                        </div>
-                        <div class="col-6 text-center">
-                            <h3>{{ total_business_demolitions|default:'0' }}</h3>
-                            <small class="text-muted">Бизнесов снесено</small>
-                        </div>
-                        <div class="col-6 text-center">
-                            <h3>{{ total_compensation|default:'0' }} ₽</h3>
-                            <small class="text-muted">Выплачено компенсаций</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Правила сноса -->
-            <div class="card mb-4">
-                <div class="card-header bg-warning">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Правила сноса</h5>
-                </div>
-                <div class="card-body">
-                    <ul class="list-unstyled">
-                        <li class="mb-3">
-                            <i class="bi bi-1-circle-fill text-primary me-2"></i>
-                            <strong>Здание удаляется навсегда</strong> - операция необратима
-                        </li>
-                        <li class="mb-3">
-                            <i class="bi bi-2-circle-fill text-primary me-2"></i>
-                            <strong>Для бизнесов</strong> - накопленная прибыль выплачивается владельцу
-                        </li>
-                        <li class="mb-3">
-                            <i class="bi bi-3-circle-fill text-primary me-2"></i>
-                            <strong>Для фабрик</strong> - остатки ресурсов теряются
-                        </li>
-                        <li class="mb-3">
-                            <i class="bi bi-4-circle-fill text-primary me-2"></i>
-                            <strong>Стоимость постройки</strong> не возвращается
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
             <!-- Последние сносы -->
             <div class="card">
                 <div class="card-header bg-dark text-white">
@@ -353,14 +300,14 @@
                         <div class="d-flex justify-content-between">
                             <div>
                                 <strong>{{ demolition.building_name }}</strong>
-                                <br><small class="text-muted">Владелец #{{ demolition.owner_id }}</small>
+                                <br><small class="text-muted">Владелец #{{ demolition.owner }}</small>
                             </div>
                             <div class="text-end">
                                 <span class="badge bg-danger">Снес</span>
                                 <br><small class="text-muted">{{ demolition.timestamp|time:"H:i" }}</small>
                             </div>
                         </div>
-                        {% if demolition.accumulated_profit > 0 %}
+                        {% if demolition.accumulated_profit|floatformat:2 != '0.00' %}
                         <div class="mt-1">
                             <small class="text-success">Выплачено: {{ demolition.accumulated_profit }} ₽</small>
                         </div>
@@ -448,7 +395,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const selected = buildingSelect.options[buildingSelect.selectedIndex];
         
         if (selected && selected.value) {
-            const lastTimestamp = parseInt(selected.dataset.last) || Math.floor(Date.now() / 1000) - 3600;
+            const selectedLastTimestamp = parseInt(selected.dataset.last) || Math.floor(Date.now() / 1000);
             
             currentBuilding = {
                 id: selected.value,
@@ -457,7 +404,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 type: selected.dataset.type,
                 cost: parseFloat(selected.dataset.cost),
                 income: parseFloat(selected.dataset.income) || 0,
-                last: lastTimestamp
+                last: selectedLastTimestamp
             };
             
             // Базовая информация о здании
@@ -475,7 +422,7 @@ document.addEventListener('DOMContentLoaded', function() {
             infoType.textContent = typeMap[currentBuilding.type] || currentBuilding.type;
             
             infoCost.textContent = currentBuilding.cost.toFixed(2) + ' ₽';
-            infoDate.textContent = formatDateTime(currentBuilding.last - 86400); // Пример: день назад
+            infoDate.textContent = formatDateTime(parseInt(selected.dataset.built) || currentBuilding.last)
             
             // Для бизнеса показываем дополнительную информацию
             if (currentBuilding.type === 'business') {

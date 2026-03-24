@@ -9,12 +9,13 @@
         <div class="d-flex justify-content-between align-items-center">
             <h2><i class="bi bi-building"></i> Стол "Великобритания"</h2>
             <div>
-                <span class="badge bg-primary badge-custom me-2">
-                    <i class="bi bi-person"></i> {{ session.username }}
-                </span>
-                
+                <span class="badge bg-primary me-2">{{ session.username }}</span>
+                <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-outline-success me-2">
+                    <i class="bi bi-tree"></i> На остров
+                </a>
             </div>
         </div>
+        <p class="text-muted">Торговля, производство кирпичей и правосудие</p>
     </div>
 
     <!-- Статистика -->
@@ -83,12 +84,15 @@
         <div class="col-md-4 mb-4">
             <div class="card">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">Производство</h5>
+                    <h5 class="mb-0">Кирпичи</h5>
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
-                        <a href="{% url 'britain_factory_work' %}" class="btn btn-outline-success btn-lg">
-                            <i class="bi bi-gear"></i> Работа на заводе
+                        <!-- Кнопка для производства кирпичей (заменили шестеренки) -->
+                        
+                        <!-- Кнопка для обмена кирпичей на корабль -->
+                        <a href="{% url 'britain_brick_exchange' %}" class="btn btn-outline-warning btn-lg">
+                            <i class="bi bi-arrow-repeat"></i> Обмен кирпичей на корабль
                         </a>
                     </div>
                 </div>
@@ -115,31 +119,223 @@
                 </div>
             </div>
         </div>
-        
-        <div class="col-md-12 mb-4">
+    </div>
+
+    <!-- Статистика кирпичей -->
+    <div class="row mb-4">
+        <div class="col-12">
             <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">Навигация</h5>
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-box"></i> Производство кирпичей</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-4">
-                           
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3>{{ bricks_produced_today|default:'0' }}</h3>
+                                    <small>Кирпичей произведено сегодня</small>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-4">
-                            <a href="#" class="btn btn-outline-secondary w-100" onclick="alert('Функция в разработке'); return false;">
-                                <i class="bi bi-bar-chart"></i> Статистика
-                            </a>
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3>{{ bricks_exchanged_today|default:'0' }}</h3>
+                                    <small>Обменов сегодня</small>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-4">
-                            <a href="#" class="btn btn-outline-secondary w-100" onclick="alert('Функция в разработке'); return false;">
-                                <i class="bi bi-search"></i> Поиск игрока
-                            </a>
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3>{{ total_bricks|default:'0' }}</h3>
+                                    <small>Всего произведено</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Сделки между игроками -->
+    <div class="row mt-2">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-handshake"></i> Сделки между игроками</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'island_deal' %}" class="btn btn-outline-primary btn-lg">
+                                    <i class="bi bi-handshake"></i> Новая сделка
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6>Сделок сегодня</h6>
+                                <h3>{{ today_player_deals|default:'0' }}</h3>
+                                <small>заключено</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if recent_player_deals %}
+                    <div class="mt-4">
+                        <h6>Последние сделки:</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Время</th>
+                                        <th>Игрок A</th>
+                                        <th>Игрок B</th>
+                                        <th>Описание</th>
+                                        <th>Автор</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for deal in recent_player_deals %}
+                                    <tr>
+                                        <td>{{ deal.timestamp|date:"H:i d.m" }}</td>
+                                        <td>{{ deal.details.player_a|default:'—' }}</td>
+                                        <td>{{ deal.details.player_b|default:'—' }}</td>
+                                        <td>{{ deal.details.description|truncatechars:30 }}</td>
+                                        <td>{{ deal.author }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Суды и каторги -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-gavel"></i> Суды и каторги</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'island_court' %}" class="btn btn-outline-danger btn-lg">
+                                    <i class="bi bi-gavel"></i> Суд
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'island_release' %}" class="btn btn-outline-warning btn-lg">
+                                    <i class="bi bi-unlock"></i> Выход с каторги
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="bg-light p-3 rounded text-center">
+                                <h6>Текущие каторжники</h6>
+                                <h3>{{ convicts_count|default:'0' }}</h3>
+                                <small>человек</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if convicts %}
+                    <div class="mt-4">
+                        <h6>Последние приговоры:</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Игрок</th>
+                                        <th>Преступление</th>
+                                        <th>Штраф</th>
+                                        <th>Срок</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for convict in convicts|slice:":3" %}
+                                    <tr>
+                                        <td>#{{ convict.player_id }}</td>
+                                        <td>{{ convict.crime_description|truncatechars:30 }}</td>
+                                        <td>{{ convict.fine_amount }} ₽</td>
+                                        <td>{{ convict.sentence_years }} лет</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Краткая информация о каперах -->
+    {% if active_privateers %}
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-person-badge"></i> Активные каперы</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Игрок</th>
+                                    <th>Корабль</th>
+                                    <th>Выслуга</th>
+                                    <th>Жалобы</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for privateer in active_privateers|slice:":5" %}
+                                <tr>
+                                    <td>#{{ privateer.player_id }}</td>
+                                    <td>{{ privateer.get_ship_type_display }}</td>
+                                    <td>
+                                        {% with minutes=privateer.tenure_minutes %}
+                                            {% if minutes < 60 %}
+                                                <span class="badge bg-success">{{ minutes }} мин</span>
+                                            {% elif minutes < 1440 %}
+                                                <span class="badge bg-warning">{{ minutes }} мин</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">{{ minutes }} мин</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if privateer.complaints > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                                            {{ privateer.complaints }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">Нет активных каперов</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

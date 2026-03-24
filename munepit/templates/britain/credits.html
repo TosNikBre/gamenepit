@@ -12,18 +12,29 @@
         color: #c62828;
     }
     .payment-progress {
-        height: 6px;
-        border-radius: 3px;
+        height: 8px;
+        border-radius: 4px;
     }
     .timer-danger {
         color: #dc3545;
         font-weight: bold;
         animation: blink 1s infinite;
     }
+    .timer-warning {
+        color: #ffc107;
+        font-weight: bold;
+    }
+    .timer-normal {
+        color: #28a745;
+    }
     @keyframes blink {
         0% { opacity: 1; }
         50% { opacity: 0.5; }
         100% { opacity: 1; }
+    }
+    .timer-cell {
+        font-family: monospace;
+        font-size: 1.1rem;
     }
 </style>
 {% endblock %}
@@ -35,7 +46,7 @@
             <h2><i class="bi bi-credit-card"></i> Управление кредитами</h2>
             <div>
                 <span class="badge bg-primary badge-custom me-2">
-                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
+                    <i class="bi bi-person"></i> {{ session.username }}
                 </span>
                 <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> Назад
@@ -146,6 +157,7 @@
                             <th>Осталось платежей</th>
                             <th>Прогресс</th>
                             <th>Последний платеж</th>
+                            <th>Время с платежа</th>
                             <th>Статус</th>
                             <th>Действия</th>
                         </tr>
@@ -172,21 +184,19 @@
                                 </span>
                             </td>
                             <td style="width: 150px;">
-                                {% with progress=credit.term_months|add:credit.remaining_payments %}
                                 <div class="progress payment-progress">
+                                    {% with percent=credit.remaining_payments|floatformat:0 %}
                                     <div class="progress-bar bg-success" 
-                                         style="width: {% widthratio credit.term_months|add:credit.remaining_payments credit.term_months 100 %}">
+                                         style="width: {{ percent }}%">
                                     </div>
+                                    {% endwith %}
                                 </div>
-                                {% endwith %}
                             </td>
                             <td>
-                                <span class="last-payment-time" data-timestamp="{{ credit.last_payment_at|date:'U' }}">
-                                    {{ credit.last_payment_at|date:"d.m.Y H:i" }}
-                                </span>
-                                {% if credit.is_overdue %}
-                                    <span class="timer-danger">⚠️</span>
-                                {% endif %}
+                                {{ credit.last_payment_at|date:"d.m.Y H:i" }}
+                            </td>
+                            <td class="timer-cell" id="timer-{{ credit.id }}">
+                                <span class="timer-normal">0м 0с</span>
                             </td>
                             <td>
                                 {% if credit.is_overdue %}
@@ -210,7 +220,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">
+                            <td colspan="9" class="text-center text-muted py-4">
                                 Нет активных кредитов
                             </td>
                         </tr>
@@ -241,19 +251,56 @@
 </div>
 
 <script>
-// Обновление таймеров
-function updateTimers() {
-    const now = Math.floor(Date.now() / 1000);
-    const paymentTimes = document.querySelectorAll('.last-payment-time');
+// Данные о кредитах из базы
+const credits = [
+    {% for credit in credits %}
+    {
+        id: {{ credit.id }},
+        last_payment: {{ credit.last_payment_at|date:'U' }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+// Функция форматирования времени
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const hours = Math.floor(mins / 60);
+    const remainingMins = mins % 60;
     
-    paymentTimes.forEach(el => {
-        const timestamp = parseInt(el.dataset.timestamp);
-        const diff = now - timestamp;
+    if (hours > 0) {
+        return `${hours}ч ${remainingMins}м ${secs}с`;
+    } else {
+        return `${mins}м ${secs}с`;
+    }
+}
+
+// Функция обновления всех таймеров
+function updateAllTimers() {
+    const now = Math.floor(Date.now() / 1000);
+    
+    credits.forEach(credit => {
+        const timerElement = document.getElementById(`timer-${credit.id}`);
+        if (!timerElement) return;
         
-        if (diff > 600) { // 10 минут
-            el.closest('tr').classList.add('overdue-row');
-            const minutes = Math.floor(diff / 60);
-            el.innerHTML = el.innerHTML.split('<')[0] + ` <span class="timer-danger">(${minutes} мин просрочки)</span>`;
+        const diffSeconds = now - credit.last_payment;
+        
+        // Определяем цвет в зависимости от времени
+        let colorClass = 'timer-normal';
+        if (diffSeconds > 900) { // больше 15 минут
+            colorClass = 'timer-danger';
+        } else if (diffSeconds > 600) { // больше 10 минут
+            colorClass = 'timer-warning';
+        }
+        
+        timerElement.innerHTML = `<span class="${colorClass}">${formatTime(diffSeconds)}</span>`;
+        
+        // Подсвечиваем строку если просрочка
+        const row = timerElement.closest('tr');
+        if (diffSeconds > 600) { // больше 10 минут
+            row.classList.add('overdue-row');
+        } else {
+            row.classList.remove('overdue-row');
         }
     });
 }
@@ -265,12 +312,15 @@ document.getElementById('statusFilter').addEventListener('change', filterTable);
 function filterTable() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const statusFilter = document.getElementById('statusFilter').value;
+    const now = Math.floor(Date.now() / 1000);
     
     const rows = document.querySelectorAll('#creditsTable tbody tr');
     
     rows.forEach(row => {
         const player = row.dataset.player.toLowerCase();
-        const status = row.dataset.status;
+        const timeStr = row.dataset.time;
+        const timeSeconds = parseInt(timeStr || '0');
+        const diffSeconds = now - timeSeconds;
         
         let show = true;
         
@@ -278,9 +328,11 @@ function filterTable() {
             show = false;
         }
         
-        if (statusFilter === 'overdue' && status !== 'overdue') {
+        if (statusFilter === 'overdue' && diffSeconds <= 600) {
             show = false;
-        } else if (statusFilter === 'normal' && status !== 'normal') {
+        } else if (statusFilter === 'critical' && diffSeconds <= 900) {
+            show = false;
+        } else if (statusFilter === 'normal' && diffSeconds > 600) {
             show = false;
         }
         
@@ -322,8 +374,12 @@ function showCreditDetails(creditId) {
     }, 500);
 }
 
-// Обновление каждые 10 секунд
-setInterval(updateTimers, 10000);
-updateTimers();
+// Запускаем обновление таймеров каждую секунду
+setInterval(updateAllTimers, 1000);
+
+// Первоначальный запуск
+document.addEventListener('DOMContentLoaded', function() {
+    updateAllTimers();
+});
 </script>
 {% endblock %}

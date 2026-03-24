@@ -31,6 +31,21 @@
                         <th>Сумма штрафа:</th>
                         <td>{{ convict.fine }} ₽</td>
                     </tr>
+
+                    <tr>
+                        <th>Внесено денег:</th>
+                        <td>{{ convict.money_input|default:0 }} ₽</td>
+                    </tr>
+                    <tr>
+                        <th>Сдача:</th>
+                        <td>
+                            {% if convict.change_due is not None %}
+                                {{ convict.change_due }} ₽
+                            {% else %}
+                                <span class="text-muted">Не рассчитана (внесено меньше штрафа)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
                     <tr>
                         <th>Конфискация имущества:</th>
                         <td>

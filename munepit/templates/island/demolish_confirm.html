@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Подтверждение сноса{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Подтверждение сноса</h3>
+    <a href="{% url 'island_demolish' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+  </div>
+  <div class="card"><div class="card-body">
+    <p>Здание: <strong>{{ demolish.name }}</strong></p>
+    <p>Тип: <strong>{{ demolish.type }}</strong></p>
+    <p>Владелец: <strong>{{ demolish.owner }}</strong></p>
+    <p>Компенсация: <strong>{{ demolish.accumulated }}</strong></p>
+    <form method="post">{% csrf_token %}<button class="btn btn-danger" type="submit">Подтвердить снос</button></form>
+  </div></div>
+</div>
+{% endblock %}
