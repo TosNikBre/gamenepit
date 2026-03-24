@@ -1,198 +1,165 @@
 {% extends 'base.html' %}
 
-{% block title %}Принятие задания - Великобритания{% endblock %}
+{% block title %}Задания для каперов{% endblock %}
 
 {% block content %}
 <div class="container">
     <div class="page-header">
         <div class="d-flex justify-content-between align-items-center">
-            <h2><i class="bi bi-star"></i> Принятие задания</h2>
+            <h2><i class="bi bi-star"></i> Задания для каперов</h2>
             <div>
-                <span class="badge bg-primary badge-custom me-2">
-                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
-                </span>
-                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                <span class="badge bg-primary me-2">{{ session.username }}</span>
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-secondary">
                     <i class="bi bi-arrow-left"></i> Назад
                 </a>
             </div>
         </div>
-        <p class="text-muted">Выдача заданий каперам</p>
+        <p class="text-muted">Управление заданиями - публичные и персональные</p>
     </div>
 
+    <!-- Отображение сообщений -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
     <div class="row">
-        <!-- Форма выдачи задания -->
-        <div class="col-md-7 mb-4">
+        <!-- Форма -->
+        <div class="col-md-5">
             <div class="card">
-                <div class="card-header bg-warning text-white">
-                    <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Новое задание</h5>
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">Управление заданиями</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" novalidate>
+                    <form method="post" id="questForm">
                         {% csrf_token %}
                         
-                        {% if form.non_field_errors %}
-                            <div class="alert alert-danger">
-                                {% for error in form.non_field_errors %}
-                                    {{ error }}
+                        <!-- Режим работы -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Режим работы</label>
+                            <div class="row">
+                                {% for radio in form.mode %}
+                                <div class="col-12 mb-2">
+                                    <div class="form-check">
+                                        {{ radio.tag }}
+                                        <label class="form-check-label" for="{{ radio.id_for_label }}">
+                                            {{ radio.choice_label }}
+                                        </label>
+                                    </div>
+                                </div>
                                 {% endfor %}
                             </div>
-                        {% endif %}
-
-                        <!-- Выбор капера -->
-                        <div class="mb-4">
-                            <label for="{{ form.privateer.id_for_label }}" class="form-label fw-bold">
-                                {{ form.privateer.label }} <span class="text-danger">*</span>
-                            </label>
-                            <select name="{{ form.privateer.name }}"
-                                    id="{{ form.privateer.id_for_label }}"
-                                    class="form-control form-control-lg {% if form.privateer.errors %}is-invalid{% endif %}"
-                                    required>
-                                <option value="">-- Выберите капера --</option>
-                                {% for privateer in form.fields.privateer.queryset %}
-                                    <option value="{{ privateer.id }}" 
-                                            {% if form.privateer.value|stringformat:"s" == privateer.id|stringformat:"s" %}selected{% endif %}>
-                                        Игрок #{{ privateer.player_id }} - {{ privateer.get_ship_type_display }}
-                                        {% if privateer.complaints > 0 %}(Жалоб: {{ privateer.complaints }}){% endif %}
-                                    </option>
-                                {% empty %}
-                                    <option value="" disabled>Нет активных каперов</option>
-                                {% endfor %}
-                            </select>
-                            {% if form.privateer.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.privateer.errors.0 }}
-                                </div>
-                            {% endif %}
                         </div>
 
-                        <!-- Сумма выплаты -->
-                        <div class="mb-4">
-                            <label for="{{ form.reward.id_for_label }}" class="form-label fw-bold">
-                                {{ form.reward.label }} <span class="text-danger">*</span>
-                            </label>
-                            <div class="input-group">
-                                <input type="number" 
-                                       name="{{ form.reward.name }}"
-                                       id="{{ form.reward.id_for_label }}"
-                                       class="form-control form-control-lg {% if form.reward.errors %}is-invalid{% endif %}"
-                                       value="{{ form.reward.value|default:'' }}"
-                                       step="0.01"
-                                       min="0"
-                                       placeholder="0.00"
-                                       required>
-                                <span class="input-group-text">₽</span>
-                                {% if form.reward.errors %}
-                                    <div class="invalid-feedback">
-                                        {{ form.reward.errors.0 }}
-                                    </div>
+                        <!-- Блок для выдачи всем -->
+                        <div id="issueFields" class="mode-fields">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">{{ form.reward.label }}</label>
+                                {{ form.reward }}
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">{{ form.description.label }}</label>
+                                {{ form.description }}
+                            </div>
+                        </div>
+
+                        <!-- Блок для назначения конкретному каперу -->
+                        <div id="assignFields" class="mode-fields" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">{{ form.privateer.label }}</label>
+                                {{ form.privateer }}
+                                {% if not active_privateers %}
+                                    <small class="text-danger">Нет активных каперов</small>
                                 {% endif %}
                             </div>
-                            <div class="form-text">Сумма вознаграждения за выполнение задания</div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">{{ form.reward.label }}</label>
+                                {{ form.reward }}
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">{{ form.description.label }}</label>
+                                {{ form.description }}
+                            </div>
                         </div>
 
-                        <!-- Описание задания -->
-                        <div class="mb-4">
-                            <label for="{{ form.description.id_for_label }}" class="form-label fw-bold">
-                                {{ form.description.label }} <span class="text-danger">*</span>
-                            </label>
-                            <textarea name="{{ form.description.name }}"
-                                      id="{{ form.description.id_for_label }}"
-                                      class="form-control form-control-lg {% if form.description.errors %}is-invalid{% endif %}"
-                                      rows="5"
-                                      placeholder="Опишите задание подробно..."
-                                      required>{{ form.description.value|default:'' }}</textarea>
-                            {% if form.description.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.description.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <div class="form-text">Подробное описание того, что нужно сделать</div>
+                        <!-- Блок для выполнения -->
+                        <div id="completeFields" class="mode-fields" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">{{ form.quest.label }}</label>
+                                {{ form.quest }}
+                                {% if not active_quests %}
+                                    <small class="text-danger">Нет активных заданий</small>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">{{ form.completer.label }}</label>
+                                {{ form.completer }}
+                            </div>
                         </div>
 
-                        <!-- Кнопки -->
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{% url 'britain_dashboard' %}" class="btn btn-secondary btn-lg me-md-2">
-                                <i class="bi bi-x-circle"></i> Отмена
-                            </a>
-                            <button type="submit" class="btn btn-warning btn-lg">
-                                <i class="bi bi-check-circle"></i> Выдать задание
-                            </button>
-                        </div>
+                        <button type="submit" class="btn btn-warning w-100 mt-3">
+                            Выполнить
+                        </button>
                     </form>
                 </div>
             </div>
         </div>
 
-        <!-- Информационная панель -->
-        <div class="col-md-5 mb-4">
-            <!-- Активные каперы -->
-            <div class="card mb-4">
+        <!-- Список заданий -->
+        <div class="col-md-7">
+            <!-- Публичные задания (для всех) -->
+            <div class="card mb-3">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-person-badge"></i> Активные каперы</h5>
+                    <h5 class="mb-0">📢 Публичные задания (для всех)</h5>
                 </div>
-                <div class="card-body">
-                    <div class="list-group">
-                        {% for privateer in active_privateers|slice:":5" %}
-                        <div class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-center">
+                <div class="card-body" style="max-height: 250px; overflow-y: auto;">
+                    {% if public_quests %}
+                        {% for quest in public_quests %}
+                        <div class="border-bottom mb-2 pb-2">
+                            <div class="d-flex justify-content-between">
                                 <div>
-                                    <strong>#{{ privateer.player_id }}</strong>
-                                    <span class="badge bg-secondary">{{ privateer.get_ship_type_display }}</span>
+                                    <span class="badge bg-success">Для всех</span>
+                                    <strong>{{ quest.reward }} ₽</strong>
                                 </div>
-                                <span class="badge {% if privateer.complaints > 0 %}bg-danger{% else %}bg-success{% endif %}">
-                                    Жалоб: {{ privateer.complaints }}
-                                </span>
+                                <small class="text-muted">{{ quest.issued_at|date:"H:i d.m" }}</small>
                             </div>
-                        </div>
-                        {% empty %}
-                        <div class="text-center text-muted py-3">
-                            Нет активных каперов
+                            <p class="mb-1">{{ quest.description }}</p>
+                            <small class="text-muted">Выдал: {{ quest.issued_by }}</small>
                         </div>
                         {% endfor %}
-                    </div>
+                    {% else %}
+                        <p class="text-muted text-center">Нет публичных заданий</p>
+                    {% endif %}
                 </div>
             </div>
 
-            <!-- Примеры заданий -->
+            <!-- Персональные задания -->
             <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Примеры заданий</h5>
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">🎯 Персональные задания</h5>
                 </div>
-                <div class="card-body">
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item">
-                            <strong>500 ₽</strong> - Перехватить торговое судно в проливе
-                        </li>
-                        <li class="list-group-item">
-                            <strong>1000 ₽</strong> - Доставить груз в колонию
-                        </li>
-                        <li class="list-group-item">
-                            <strong>750 ₽</strong> - Сопровождение каравана
-                        </li>
-                        <li class="list-group-item">
-                            <strong>2000 ₽</strong> - Захват вражеского фрегата
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Последние задания -->
-            <div class="card mt-4">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние задания</h5>
-                </div>
-                <div class="card-body">
-                    {% for quest in recent_quests %}
-                    <div class="border-bottom mb-2 pb-2">
-                        <div class="d-flex justify-content-between">
-                            <span>Игрок #{{ quest.player_id }}</span>
-                            <span class="badge bg-primary">{{ quest.reward }} ₽</span>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    {% if personal_quests %}
+                        {% for quest in personal_quests %}
+                        <div class="border-bottom mb-2 pb-2">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <span class="badge bg-warning">Капер #{{ quest.player_id }}</span>
+                                    <strong>{{ quest.reward }} ₽</strong>
+                                </div>
+                                <small class="text-muted">{{ quest.issued_at|date:"H:i d.m" }}</small>
+                            </div>
+                            <p class="mb-1">{{ quest.description }}</p>
+                            <small class="text-muted">Выдал: {{ quest.issued_by }}</small>
                         </div>
-                        <small class="text-muted">{{ quest.description|truncatechars:50 }}</small>
-                    </div>
-                    {% empty %}
-                    <p class="text-muted text-center mb-0">Нет заданий</p>
-                    {% endfor %}
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted text-center">Нет персональных заданий</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -201,15 +168,35 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Рекомендуемые суммы
-    const rewardInput = document.getElementById('{{ form.reward.id_for_label }}');
-    const suggestionBtns = document.querySelectorAll('.suggestion-btn');
+    const modeRadios = document.querySelectorAll('input[name="mode"]');
+    const issueFields = document.getElementById('issueFields');
+    const assignFields = document.getElementById('assignFields');
+    const completeFields = document.getElementById('completeFields');
     
-    suggestionBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            rewardInput.value = this.dataset.amount;
-        });
+    function toggleFields() {
+        const selectedMode = document.querySelector('input[name="mode"]:checked')?.value;
+        
+        // Скрываем все
+        issueFields.style.display = 'none';
+        assignFields.style.display = 'none';
+        completeFields.style.display = 'none';
+        
+        // Показываем нужные
+        if (selectedMode === 'issue') {
+            issueFields.style.display = 'block';
+        } else if (selectedMode === 'assign') {
+            assignFields.style.display = 'block';
+        } else if (selectedMode === 'complete') {
+            completeFields.style.display = 'block';
+        }
+    }
+    
+    modeRadios.forEach(radio => {
+        radio.addEventListener('change', toggleFields);
     });
+    
+    // Инициализация
+    toggleFields();
 });
 </script>
 {% endblock %}

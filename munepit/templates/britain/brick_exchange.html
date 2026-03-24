@@ -1,0 +1,105 @@
+<!-- templates/britain/brick_exchange.html -->
+{% extends 'base.html' %}
+
+{% block title %}Обмен кирпичей - Великобритания{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-box"></i> Обмен кирпичей</h2>
+            <div>
+                <span class="badge bg-primary me-2">{{ session.username }}</span>
+                <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+        <p class="text-muted">Обменяйте кирпичи на стартовый корабль</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">Получение стартового корабля</h5>
+                </div>
+                <div class="card-body">
+                    
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Правила обмена:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>10 кирпичей = Люггер (базовый)</li>
+                            <li>10 кирпичей = Люггер (с орудиями)</li>
+                            <li>Корабли выдаются только новым игрокам</li>
+                        </ul>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Номер игрока</label>
+                            <input type="text" name="player_id" class="form-control form-control-lg" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Выберите корабль</label>
+                            <select name="ship_type" class="form-control form-control-lg" required>
+                                <option value="">-- Выберите --</option>
+                                <option value="basic">🚢 Люггер (базовый)</option>
+                                <option value="armed">⚔️ Люггер (с орудиями)</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Количество кирпичей</label>
+                            <input type="number" name="bricks_count" class="form-control form-control-lg" 
+                                   value="10" min="1" max="100" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-warning btn-lg w-100">
+                            <i class="bi bi-arrow-repeat"></i> Обменять
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Доступные корабли</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-2">
+                                <div class="card-body text-center">
+                                    <div class="fs-1">🚢</div>
+                                    <h6>Люггер (базовый)</h6>
+                                    
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-2">
+                                <div class="card-body text-center">
+                                    <div class="fs-1">⚔️</div>
+                                    <h6>Люггер (с орудиями)</h6>
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

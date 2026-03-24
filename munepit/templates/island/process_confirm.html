@@ -1,0 +1,39 @@
+<!-- templates/island/process_confirm.html -->
+{% extends 'base.html' %}
+
+{% block title %}Подтверждение{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Подтверждение</h5>
+                </div>
+                <div class="card-body text-center">
+                    
+                    <i class="bi bi-gear text-info" style="font-size: 3rem;"></i>
+                    
+                    <hr>
+                    
+                    <p><strong>Фабрика:</strong> {{ process.factory_name }}</p>
+                    <p><strong>Кол-во:</strong> {{ process.quantity }}</p>
+                    <p><strong>Сумма:</strong> {{ process.total }} ₽</p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success w-100 mb-2">
+                            <i class="bi bi-check-lg"></i> Подтвердить
+                        </button>
+                        <a href="{% url 'island_process_resource' %}" class="btn btn-outline-secondary w-100">
+                            Отмена
+                        </a>
+                    </form>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

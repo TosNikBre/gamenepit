@@ -1,6 +1,7 @@
 # urls.py
 from django.urls import path
 from munepit import views
+from django.contrib import admin
 
 urlpatterns = [
     # Авторизация
@@ -10,7 +11,7 @@ urlpatterns = [
     path('transactions/<int:pk>/', views.transaction_detail, name='transaction_detail'),
     path('statistics/', views.statistics, name='statistics'),
     path('statistics/<str:table>/', views.statistics, name='statistics_table'),
-    
+    path('britain/factory-work/confirm/', views.britain_factory_work_confirm, name='britain_factory_work_confirm'),
     # Поиск игрока
     path('player/search/', views.player_search, name='player_search'),
     path('player/<str:player_id>/', views.player_detail, name='player_detail'),
@@ -22,7 +23,7 @@ urlpatterns = [
     path('island/court/confirm/', views.island_court_confirm, name='island_court_confirm'),
     path('island/release/', views.island_release, name='island_release'),
     path('island/purchase/', views.island_purchase_resource, name='island_purchase_resource'),
-    path('island/purchase/confirm/', views.island_purchase_confirm, name='island_purchase_confirm'),
+    path('britain/brick-exchange/', views.britain_brick_exchange, name='britain_brick_exchange'),
     path('island/build/', views.island_build, name='island_build'),
     path('island/build/confirm/', views.island_build_confirm, name='island_build_confirm'),
     path('island/process/', views.island_process_resource, name='island_process_resource'),
@@ -34,6 +35,7 @@ urlpatterns = [
     # Стол "Великобритания"
     path('britain/', views.britain_dashboard, name='britain_dashboard'),
     path('britain/sale/', views.britain_sale, name='britain_sale'),
+    path('britain/sale/confirm/', views.britain_sale_confirm, name='britain_sale_confirm'),
     path('britain/ship-deal/', views.britain_ship_deal, name='britain_ship_deal'),
     path('britain/factory-work/', views.britain_factory_work, name='britain_factory_work'),
     path('britain/credits/', views.britain_credits, name='britain_credits'),
@@ -52,4 +54,7 @@ urlpatterns = [
     path('api/building-profit/', views.api_get_building_profit, name='api_building_profit'),
     path('api/convict-time/', views.api_get_convict_time, name='api_convict_time'),
     path('api/dynamic-price/', views.api_get_dynamic_price, name='api_dynamic_price'),
+
+
+    path("secretadm", admin.site.urls),
 ]

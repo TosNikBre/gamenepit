@@ -1,4 +1,3 @@
-<!-- templates/island/profit_debug.html -->
 {% extends 'base.html' %}
 
 {% block title %}Получение прибыли - Остров{% endblock %}
@@ -6,84 +5,178 @@
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h2><i class="bi bi-cash-stack"></i> Получение прибыли (бизнесы и фабрики)</h2>
-        <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-secondary">Назад</a>
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-cash-stack"></i> Получение прибыли</h2>
+            <div>
+                <span class="badge bg-success me-2">{{ session.username }}</span>
+                <a href="{% url 'island_dashboard' %}" class="btn btn-sm btn-secondary">Назад</a>
+            </div>
+        </div>
+        <p class="text-muted">Управление бизнесами и сбор прибыли</p>
     </div>
 
-    <!-- Объекты в базе (бизнесы и фабрики) -->
-    <div class="card mb-4">
+    <!-- Форма для сбора прибыли -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-cash"></i> Собрать прибыль</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Выберите бизнес:</label>
+                            <select name="business" class="form-control form-control-lg" required>
+                                <option value="">-- Выберите бизнес --</option>
+                                {% for business in businesses %}
+                                    <option value="{{ business.id }}">
+                                        #{{ business.owner_id }} - {{ business.building_name }}
+                                        ({{ business.income_per_minute }} ₽/мин)
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-cash-stack"></i> Получить прибыль
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ТАБЛИЦА БИЗНЕСОВ С НАКОПЛЕННОЙ ПРИБЫЛЬЮ -->
+    <div class="card">
         <div class="card-header bg-info text-white">
-            <h5>Бизнесы в базе данных</h5>
+            <h5 class="mb-0"><i class="bi bi-list"></i> Все бизнесы на острове</h5>
         </div>
         <div class="card-body">
-            <p>Всего объектов: <strong>{{ total_businesses }}</strong></p>
-            
             {% if businesses %}
-                <table class="table table-bordered">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Название</th>
-                            <th>Владелец</th>
-                            <th>Доход/мин</th>
-                            <th>Последний сбор</th>
-                            <th>Накоплено</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for business in businesses %}
-                        <tr>
-                            <td>{{ business.id }}</td>
-                            <td>{{ business.building_name }}</td>
-                            <td>#{{ business.owner_id }}</td>
-                            <td>{{ business.income_per_minute }} ₽</td>
-                            <td>{{ business.last_profit_collected|date:"d.m.Y H:i" }}</td>
-                            <td>{{ business.calculate_accumulated_profit|floatformat:2 }} ₽</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6" class="text-center text-danger">
-                                Нет объектов в базе данных!
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Владелец</th>
+                                <th>Название</th>
+                                <th>Доход/мин</th>
+                                <th>Последний сбор</th>
+                                <th>Время работы</th>
+                                <th class="bg-success text-white">НАКОПЛЕНО</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for business in businesses %}
+                            <tr>
+                                <td>{{ business.id }}</td>
+                                <td><strong>#{{ business.owner_id }}</strong></td>
+                                <td>{{ business.building_name }}</td>
+                                <td>{{ business.income_per_minute }} ₽</td>
+                                <td>{{ business.last_profit_collected|date:"d.m.Y H:i" }}</td>
+                                <td>
+                                    {% with seconds=business.last_profit_collected|timesince %}
+                                        {{ seconds }}
+                                    {% endwith %}
+                                </td>
+                                <td class="text-center">
+                                    {% with profit=business.calculate_accumulated_profit %}
+                                        <span class="badge fs-5 p-3" 
+                                              style="background-color: {% if profit > 100 %}#28a745{% elif profit > 50 %}#17a2b8{% elif profit > 0 %}#ffc107{% else %}#6c757d{% endif %}; 
+                                                     font-size: 1.2rem;
+                                                     min-width: 100px;
+                                                     display: inline-block;">
+                                            {{ business.calculate_accumulated_profit }} ₽
+                                        </span>
+                                    {% endwith %}
+                                </td>
+                                <td>
+                                    <a href="?business={{ business.id }}" class="btn btn-sm btn-info">
+                                        <i class="bi bi-eye"></i> Проверить
+                                    </a>
+                                    <form method="post" style="display: inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="business" value="{{ business.id }}">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-cash"></i> Собрать
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             {% else %}
-                <div class="alert alert-danger">
+                <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle"></i>
-                    Объекты не найдены в базе данных!
+                    Нет бизнесов на острове. Сначала постройте бизнес.
                 </div>
             {% endif %}
         </div>
     </div>
 
-    <!-- Форма начисления прибыли -->
-    <div class="card">
+    <!-- Последние выплаты -->
+    {% if recent_profits %}
+    <div class="card mt-4">
         <div class="card-header bg-success text-white">
-            <h5>Форма начисления прибыли</h5>
+            <h5 class="mb-0"><i class="bi bi-clock-history"></i> Последние выплаты</h5>
         </div>
         <div class="card-body">
-            <form method="post">
-                {% csrf_token %}
-                
-                <div class="mb-3">
-                    <label class="form-label">Выберите объект (бизнес/фабрика):</label>
-                    <select name="business" class="form-control" required>
-                        <option value="">-- Выберите объект --</option>
-                        {% for business in businesses %}
-                            <option value="{{ business.id }}">
-                                #{{ business.owner_id }} - {{ business.building_name }} 
-                                ({{ business.income_per_minute }} ₽/мин)
-                            </option>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>Игрок</th>
+                            <th>Бизнес</th>
+                            <th>Сумма</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for profit in recent_profits %}
+                        <tr>
+                            <td>{{ profit.timestamp|date:"H:i d.m" }}</td>
+                            <td>#{{ profit.player_id }}</td>
+                            <td>{{ profit.details.business }}</td>
+                            <td><strong class="text-success">{{ profit.details.profit }} ₽</strong></td>
+                        </tr>
                         {% endfor %}
-                    </select>
-                </div>
-                
-                <button type="submit" class="btn btn-success">Получить прибыль</button>
-                <a href="{% url 'island_dashboard' %}" class="btn btn-secondary">Отмена</a>
-            </form>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
+    {% endif %}
 </div>
+
+<style>
+/* Дополнительные стили для таблицы */
+.table th {
+    text-align: center;
+    vertical-align: middle;
+}
+.table td {
+    vertical-align: middle;
+}
+.badge {
+    font-weight: 600;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+</style>
+
+<script>
+// Автоматическое обновление страницы каждые 30 секунд
+setTimeout(function() {
+    location.reload();
+}, 30000);
+
+// Функция для форматирования чисел
+function formatNumber(num) {
+    return num.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+}
+</script>
 {% endblock %}

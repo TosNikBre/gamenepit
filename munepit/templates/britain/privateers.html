@@ -22,6 +22,35 @@
         border-left: 4px solid #dc3545;
         background-color: #fff5f5;
     }
+    .tenure-badge {
+        font-family: monospace;
+        font-size: 1.1rem;
+        padding: 5px 10px;
+        border-radius: 20px;
+        display: inline-block;
+    }
+    .tenure-normal {
+        background-color: #28a745;
+        color: white;
+    }
+    .tenure-warning {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    .tenure-danger {
+        background-color: #dc3545;
+        color: white;
+        animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.8; }
+        100% { opacity: 1; }
+    }
+    .timer-icon {
+        font-size: 1.2rem;
+        margin-right: 5px;
+    }
 </style>
 {% endblock %}
 
@@ -32,7 +61,7 @@
             <h2><i class="bi bi-person-badge"></i> Управление каперами</h2>
             <div>
                 <span class="badge bg-primary badge-custom me-2">
-                    <i class="bi bi-person"></i> {{ session.username|default:'Модератор' }}
+                    <i class="bi bi-person"></i> {{ session.username }}
                 </span>
                 <a href="{% url 'britain_dashboard' %}" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> Назад
@@ -71,8 +100,8 @@
         <div class="col-md-3">
             <div class="card bg-info text-white">
                 <div class="card-body">
-                    <h6>Общая выслуга</h6>
-                    <h3>{{ total_tenure }} дн</h3>
+                    <h6>Средняя выслуга</h6>
+                    <h3>{{ avg_tenure_minutes }} мин</h3>
                 </div>
             </div>
         </div>
@@ -174,8 +203,20 @@
                                 </span>
                             </td>
                             <td>
-                                {% with tenure=privateer.tenure %}
-                                    {{ tenure.days }}д {{ tenure.hours }}ч
+                                {% with minutes=privateer.tenure_minutes %}
+                                    {% if minutes < 60 %}
+                                        <span class="tenure-badge tenure-normal">
+                                            <i class="bi bi-clock timer-icon"></i>{{ minutes }} мин
+                                        </span>
+                                    {% elif minutes < 1440 %}
+                                        <span class="tenure-badge tenure-warning">
+                                            <i class="bi bi-clock timer-icon"></i>{{ minutes|stringformat:"d"|slice:":-2"|add:"0" }} ч {{ minutes|stringformat:"d"|slice:"-2:" }} мин
+                                        </span>
+                                    {% else %}
+                                        <span class="tenure-badge tenure-danger">
+                                            <i class="bi bi-clock timer-icon"></i>{{ minutes|stringformat:"d"|slice:":-3"|add:"0" }} д {{ minutes|stringformat:"d"|slice:"-3:-2"|add:"0" }} ч
+                                        </span>
+                                    {% endif %}
                                 {% endwith %}
                             </td>
                             <td>
@@ -320,5 +361,19 @@ function showComplaintHistory(privateerId) {
         `;
     }, 500);
 }
+
+// Обновление выслуги каждую минуту
+setInterval(function() {
+    location.reload();
+}, 60000);
 </script>
+
+<style>
+[class*="tenure-"] {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+</style>
 {% endblock %}
